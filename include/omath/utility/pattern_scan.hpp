@@ -5,7 +5,10 @@
 #pragma once
 #include <algorithm>
 #include <array>
+#include <cstddef>
 #include <expected>
+#include <iterator>
+#include <memory>
 #include <optional>
 #include <span>
 #include <stdexcept>
@@ -97,22 +100,38 @@ namespace omath
             if (scan_size < 0)
                 return end;
 
-            for (std::ptrdiff_t i = 0; i <= scan_size; i++)
+            // Bytes laid out in one block of memory go to the vectorized scanner
+            if constexpr (std::contiguous_iterator<IteratorType>
+                          && std::same_as<std::iter_value_t<IteratorType>, std::byte>)
             {
-                bool found = true;
+                const std::byte* bytes = std::to_address(begin);
 
-                for (std::ptrdiff_t j = 0; j < static_cast<std::ptrdiff_t>(parsed_pattern.size()); j++)
-                {
-                    found = parsed_pattern.at(j) == std::nullopt || parsed_pattern.at(j) == *(begin + i + j);
-
-                    if (!found)
-                        break;
-                }
-                if (found)
-                    return begin + i;
+                return begin + (scan_bytes_for_parsed_pattern(bytes, bytes + whole_range_size, parsed_pattern) - bytes);
             }
-            return end;
+            else
+            {
+                for (std::ptrdiff_t i = 0; i <= scan_size; i++)
+                {
+                    bool found = true;
+
+                    for (std::ptrdiff_t j = 0; j < static_cast<std::ptrdiff_t>(parsed_pattern.size()); j++)
+                    {
+                        found = parsed_pattern.at(j) == std::nullopt || parsed_pattern.at(j) == *(begin + i + j);
+
+                        if (!found)
+                            break;
+                    }
+                    if (found)
+                        return begin + i;
+                }
+                return end;
+            }
         }
+        // Returns end when there is no match
+        [[nodiscard]]
+        static const std::byte* scan_bytes_for_parsed_pattern(const std::byte* begin, const std::byte* end,
+                                                              std::span<const std::optional<std::byte>> pattern);
+
         [[nodiscard]]
         static std::expected<std::vector<std::optional<std::byte>>, PatternScanError>
         parse_pattern(const std::string_view& pattern_string);

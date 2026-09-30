@@ -99,7 +99,7 @@ private:
 
 Let `N` be the number of bytes in the range and `M` the number of **pattern tokens**.
 
-* Time: **O(N × M)** (simple sliding window with early break).
+* Time: **O(N × M)** in the worst case. Contiguous byte ranges are filtered 32 positions at a time with AVX2 (`OMATH_USE_AVX2`) or 16 at a time with SSE2, and the whole pattern is compared only where two of its bytes both match, so a typical scan is close to **O(N)**. Other iterators use a simple sliding window with early break.
 * Space: **O(M)** for the parsed pattern vector.
 
 ---
