@@ -2,4 +2,4 @@
 
 ## Reporting a Vulnerability
 
-Please report security issues to `orange_github@proton.me`
+Please report security issues to `orange@libomath.org`

@@ -11,4 +11,4 @@ And a big hand to everyone else who has contributed over the past!
 
 THANKS! <3
 
-    -- Orange++ <orange_github@proton.me>
+    -- Orange++ <orange@libomath.org>
