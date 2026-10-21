@@ -488,8 +488,14 @@ TEST(unit_test_serious_engine, PredEngineTraitUsesYAsHeight)
 TEST(unit_test_serious_engine, MeshTraitForwardsRotationMatrix)
 {
     const auto angles = make_angles(20.f, -35.f, 15.f);
+    const auto from_trait = serious_engine::MeshTrait::rotation_matrix(angles);
+    const auto direct = serious_engine::rotation_matrix(angles);
 
-    EXPECT_EQ(serious_engine::MeshTrait::rotation_matrix(angles), serious_engine::rotation_matrix(angles));
+    // Not EXPECT_EQ: the compiler may fold one call at compile time and run the other through libm (or contract
+    // multiply-adds differently), so the last bit can differ between the two even though the math is the same.
+    for (std::size_t row = 0; row < 4; row++)
+        for (std::size_t col = 0; col < 4; col++)
+            EXPECT_NEAR(from_trait.at(row, col), direct.at(row, col), 1e-6f) << "row " << row << " col " << col;
 }
 
 // ---------------------------------------------------------------- units
