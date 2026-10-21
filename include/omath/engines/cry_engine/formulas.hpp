@@ -10,7 +10,8 @@ namespace omath::cry_engine
     [[nodiscard("rotation matrix result should not be discarded")]]
     constexpr Mat4X4 rotation_matrix(const ViewAngles& angles) noexcept
     {
-        return mat_rotation_zyx<float, MatStoreType::ROW_MAJOR>(angles.yaw, angles.roll, angles.pitch);
+        // yaw * pitch * roll: roll turns around the camera's own forward axis
+        return mat_rotation_zxy<float, MatStoreType::ROW_MAJOR>(angles.yaw, angles.pitch, angles.roll);
     }
 
     [[nodiscard("forward vector result should not be discarded")]]
@@ -58,7 +59,7 @@ namespace omath::cry_engine
     [[nodiscard("rotation angles result should not be discarded")]]
     constexpr ViewAngles extract_rotation_angles(const Mat4X4& mat) noexcept
     {
-        const auto angles = mat_extract_rotation_zyx(mat);
+        const auto angles = mat_extract_rotation_zxy(mat);
         return {
                 PitchAngle::from_degrees(angles.x),
                 YawAngle::from_degrees(angles.z),
@@ -87,7 +88,7 @@ namespace omath::cry_engine
     [[nodiscard("centimeters value should not be discarded")]]
     constexpr FloatingType units_to_centimeters(const FloatingType& units)
     {
-        return units / static_cast<FloatingType>(100);
+        return units * static_cast<FloatingType>(100);
     }
 
     template<class FloatingType>
@@ -111,7 +112,7 @@ namespace omath::cry_engine
     [[nodiscard("units value should not be discarded")]]
     constexpr FloatingType centimeters_to_units(const FloatingType& centimeters)
     {
-        return centimeters * static_cast<FloatingType>(100);
+        return centimeters / static_cast<FloatingType>(100);
     }
 
     template<class FloatingType>

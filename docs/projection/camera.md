@@ -235,6 +235,8 @@ In constant-evaluated contexts (`constexpr` cameras) the caches are bypassed and
 * **Store ordering**: `Mat4X4Type::get_store_ordering()` decides how `at(r, c)` indexes memory; both orderings are supported transparently.
 * **`ViewPort` and `FieldOfView` are `float`** even for `double` cameras; `extract_projection_params` casts.
 * **`world_to_view_port` returns NDC**, not pixels, despite the name.
+* **`extract_projection_params` returns the FOV the camera takes**, so it can go straight back into `set_field_of_view`. By default that is the vertical FOV from `m[1,1]`; a trait whose FOV means something else (horizontal, or horizontal at a reference aspect ratio) adds an optional `static FieldOfView calc_field_of_view(const Mat4X4Type&)` to undo its own projection.
+* **`calc_view_angles_from_view_matrix` recovers pitch, yaw and roll** for every built-in engine. A trait opts in with `static ViewAngles extract_rotation_angles(const Mat4X4Type&)` (the inverse of its rotation matrix); the camera turns the view matrix back into that rotation as `R = Vᵀ · V(0)`, where `V(0)` is the view of a camera with all angles at 0. A custom trait without it falls back to look-at plus a roll solved around forward, which is exact only for traits that roll around the camera's own forward axis (all built-in engines do); for the others roll is left at 0.
 
 ---
 

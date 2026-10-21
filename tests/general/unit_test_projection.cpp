@@ -11,6 +11,7 @@
 #include <omath/engines/iw_engine/camera.hpp>
 #include <omath/engines/opengl_engine/camera.hpp>
 #include <omath/engines/rage_engine/camera.hpp>
+#include <omath/engines/serious_engine/camera.hpp>
 #include <omath/engines/source_engine/camera.hpp>
 #include <omath/engines/unreal_engine/camera.hpp>
 #include <omath/linear_algebra/triangle.hpp>
@@ -685,9 +686,9 @@ TEST(UnitTestProjection, CalcViewAnglesFromViewMatrix_OffOriginCameraIgnored)
     EXPECT_NEAR(result.yaw.as_degrees(), 60.f, k_eps);
 }
 
-TEST(UnitTestProjection, CalcViewAnglesFromViewMatrix_RollAlwaysZero)
+TEST(UnitTestProjection, CalcViewAnglesFromViewMatrix_RecoversRoll)
 {
-    // Roll cannot be encoded in the forward vector, so it is always 0 in the result.
+    // Roll is not in the forward row, but the up row carries it.
     constexpr auto fov = omath::projection::FieldOfView::from_degrees(90.f);
     const omath::source_engine::ViewAngles angles{omath::source_engine::PitchAngle::from_degrees(10.f),
                                                   omath::source_engine::YawAngle::from_degrees(30.f),
@@ -696,7 +697,7 @@ TEST(UnitTestProjection, CalcViewAnglesFromViewMatrix_RollAlwaysZero)
 
     const auto result = omath::source_engine::Camera::calc_view_angles_from_view_matrix(cam.get_view_matrix());
 
-    EXPECT_FLOAT_EQ(result.roll.as_degrees(), 0.f);
+    EXPECT_NEAR(result.roll.as_degrees(), 15.f, 1e-3f);
 }
 
 TEST(UnitTestProjection, CalcOriginFromViewMatrix_AtOrigin)
@@ -1025,9 +1026,8 @@ TEST(UnitTestProjection, IWEngine_ZeroAngles_BasisVectors)
 
 TEST(UnitTestProjection, ExtractProjectionParams_FovRoundTrip)
 {
-    // Source engine applies a 0.75 scale factor to its projection matrix, so
-    // extract_projection_params (standard formula) does not round-trip with it.
-    // Use Unity engine, which uses a standard projection matrix.
+    // Unity uses a plain vertical FOV, so this exercises the default formula. Engines with other FOV conventions are
+    // covered by ExtractProjectionParams_FovRoundTripAllEngines.
     constexpr float k_eps = 1e-4f;
     constexpr auto fov = omath::projection::FieldOfView::from_degrees(75.f);
     const auto cam = omath::unity_engine::Camera({}, {}, {1280.f, 720.f}, fov, 0.03f, 1000.f);
@@ -1058,6 +1058,246 @@ TEST(UnitTestProjection, ExtractProjectionParams_UnityEngine)
 
     EXPECT_NEAR(params.fov.as_degrees(), 60.f, k_eps);
     EXPECT_NEAR(params.aspect_ratio, 1280.f / 720.f, k_eps);
+}
+
+namespace
+{
+    // The FOV extract_projection_params() returns is the kind the camera was built with - horizontal for Unreal and
+    // Serious, horizontal at 4:3 for Source/IW, vertical elsewhere - so feeding it back reproduces the matrix.
+    template<class CameraType>
+    void expect_projection_params_round_trip(const float fov_degrees)
+    {
+        const auto fov = omath::projection::FieldOfView::from_degrees(fov_degrees);
+        const CameraType cam({}, {}, {1280.f, 1024.f}, fov, 0.1f, 1000.f);
+
+        const auto params = CameraType::extract_projection_params(cam.get_projection_matrix());
+
+        EXPECT_NEAR(params.fov.as_degrees(), fov_degrees, 1e-3f);
+        EXPECT_NEAR(params.aspect_ratio, 1280.f / 1024.f, 1e-4f);
+    }
+
+    // Rebuilding the view matrix from the recovered angles must give the original matrix back, and for angles inside
+    // the engine's ranges (away from the +/-90 pitch singularity) the angles themselves come back too.
+    template<class CameraType, class ViewAnglesType>
+    void expect_view_angles_round_trip(const ViewAnglesType& angles)
+    {
+        const CameraType cam({}, angles, {1280.f, 1024.f}, omath::projection::FieldOfView::from_degrees(90.f), 0.1f,
+                             1000.f);
+        const auto view = cam.get_view_matrix();
+
+        const auto recovered = CameraType::calc_view_angles_from_view_matrix(view);
+        const CameraType rebuilt_cam({}, recovered, {1280.f, 1024.f},
+                                     omath::projection::FieldOfView::from_degrees(90.f), 0.1f, 1000.f);
+        const auto rebuilt = rebuilt_cam.get_view_matrix();
+
+        const auto angle_difference = [](const auto a, const auto b)
+        {
+            return std::remainder(static_cast<double>(a) - static_cast<double>(b), 360.0);
+        };
+        EXPECT_NEAR(angle_difference(recovered.pitch.as_degrees(), angles.pitch.as_degrees()), 0.0, 1e-2);
+        EXPECT_NEAR(angle_difference(recovered.yaw.as_degrees(), angles.yaw.as_degrees()), 0.0, 1e-2);
+        EXPECT_NEAR(angle_difference(recovered.roll.as_degrees(), angles.roll.as_degrees()), 0.0, 1e-2);
+        for (std::size_t row = 0; row < 3; ++row)
+            for (std::size_t col = 0; col < 3; ++col)
+                EXPECT_NEAR(rebuilt.at(row, col), view.at(row, col), 1e-4f) << "row " << row << " col " << col;
+    }
+
+    template<class CameraType>
+    void expect_view_angles_round_trip_grid()
+    {
+        using ViewAnglesType = std::remove_cvref_t<decltype(std::declval<const CameraType&>().get_view_angles())>;
+        using PitchType = decltype(ViewAnglesType::pitch);
+        using YawType = decltype(ViewAnglesType::yaw);
+        using RollType = decltype(ViewAnglesType::roll);
+
+        for (const auto pitch : {-70.f, -20.f, 0.f, 35.f, 80.f})
+            for (const auto yaw : {-170.f, -90.f, -40.f, 0.f, 90.f, 100.f})
+                for (const auto roll : {-150.f, -35.f, 0.f, 20.f, 120.f})
+                {
+                    SCOPED_TRACE(testing::Message() << "pitch " << pitch << " yaw " << yaw << " roll " << roll);
+                    expect_view_angles_round_trip<CameraType>(ViewAnglesType{
+                            PitchType::from_degrees(pitch), YawType::from_degrees(yaw), RollType::from_degrees(roll)});
+                }
+    }
+
+    // An engine trait with extract_rotation_angles() taken away, to exercise the camera's look-at fallback.
+    template<class Trait, class ViewAnglesType, class Mat4X4Type>
+    struct WithoutRotationExtraction final
+    {
+        static constexpr ViewAnglesType calc_look_at_angle(const omath::Vector3<float>& cam_origin,
+                                                           const omath::Vector3<float>& look_at) noexcept
+        {
+            return Trait::calc_look_at_angle(cam_origin, look_at);
+        }
+        static constexpr Mat4X4Type calc_view_matrix(const ViewAnglesType& angles,
+                                                     const omath::Vector3<float>& cam_origin) noexcept
+        {
+            return Trait::calc_view_matrix(angles, cam_origin);
+        }
+        static constexpr Mat4X4Type calc_projection_matrix(const omath::projection::FieldOfView& fov,
+                                                           const omath::projection::ViewPort& view_port,
+                                                           const float near_plane, const float far_plane,
+                                                           const omath::NDCDepthRange ndc_depth_range) noexcept
+        {
+            return Trait::calc_projection_matrix(fov, view_port, near_plane, far_plane, ndc_depth_range);
+        }
+    };
+} // namespace
+
+TEST(UnitTestProjection, ExtractProjectionParams_FovRoundTripAllEngines)
+{
+    for (const auto fov : {60.f, 90.f, 110.f})
+    {
+        expect_projection_params_round_trip<omath::source_engine::Camera>(fov);
+        expect_projection_params_round_trip<omath::iw_engine::Camera>(fov);
+        expect_projection_params_round_trip<omath::unreal_engine::Camera>(fov);
+        expect_projection_params_round_trip<omath::serious_engine::Camera>(fov);
+        expect_projection_params_round_trip<omath::unity_engine::Camera>(fov);
+        expect_projection_params_round_trip<omath::opengl_engine::Camera>(fov);
+        expect_projection_params_round_trip<omath::frostbite_engine::Camera>(fov);
+        expect_projection_params_round_trip<omath::rage_engine::Camera>(fov);
+        expect_projection_params_round_trip<omath::cry_engine::Camera>(fov);
+    }
+}
+
+// Engines that roll around the camera's forward axis and engines that roll around a world axis alike: the trait's
+// extract_rotation_angles() inverts whichever rotation order the engine uses.
+TEST(UnitTestProjection, CalcViewAnglesFromViewMatrix_RoundTrip_Source)
+{
+    expect_view_angles_round_trip_grid<omath::source_engine::Camera>();
+}
+TEST(UnitTestProjection, CalcViewAnglesFromViewMatrix_RoundTrip_Iw)
+{
+    expect_view_angles_round_trip_grid<omath::iw_engine::Camera>();
+}
+TEST(UnitTestProjection, CalcViewAnglesFromViewMatrix_RoundTrip_Unreal)
+{
+    expect_view_angles_round_trip_grid<omath::unreal_engine::Camera>();
+}
+TEST(UnitTestProjection, CalcViewAnglesFromViewMatrix_RoundTrip_Serious)
+{
+    expect_view_angles_round_trip_grid<omath::serious_engine::Camera>();
+}
+TEST(UnitTestProjection, CalcViewAnglesFromViewMatrix_RoundTrip_Unity)
+{
+    expect_view_angles_round_trip_grid<omath::unity_engine::Camera>();
+}
+TEST(UnitTestProjection, CalcViewAnglesFromViewMatrix_RoundTrip_OpenGl)
+{
+    expect_view_angles_round_trip_grid<omath::opengl_engine::Camera>();
+}
+TEST(UnitTestProjection, CalcViewAnglesFromViewMatrix_RoundTrip_Frostbite)
+{
+    expect_view_angles_round_trip_grid<omath::frostbite_engine::Camera>();
+}
+TEST(UnitTestProjection, CalcViewAnglesFromViewMatrix_RoundTrip_Rage)
+{
+    expect_view_angles_round_trip_grid<omath::rage_engine::Camera>();
+}
+TEST(UnitTestProjection, CalcViewAnglesFromViewMatrix_RoundTrip_Cry)
+{
+    expect_view_angles_round_trip_grid<omath::cry_engine::Camera>();
+}
+
+namespace
+{
+    // Roll turns the camera around its own forward axis: it must not change where the camera looks.
+    template<class CameraType>
+    void expect_roll_keeps_forward()
+    {
+        using ViewAnglesType = std::remove_cvref_t<decltype(std::declval<const CameraType&>().get_view_angles())>;
+        using PitchType = decltype(ViewAnglesType::pitch);
+        using YawType = decltype(ViewAnglesType::yaw);
+        using RollType = decltype(ViewAnglesType::roll);
+
+        for (const auto roll : {-120.f, -30.f, 45.f, 160.f})
+        {
+            const auto make = [&](const float roll_degrees)
+            {
+                return CameraType({},
+                                  ViewAnglesType{PitchType::from_degrees(35.f), YawType::from_degrees(-60.f),
+                                                 RollType::from_degrees(roll_degrees)},
+                                  {1280.f, 1024.f}, omath::projection::FieldOfView::from_degrees(90.f), 0.1f, 1000.f);
+            };
+            const auto level_forward = make(0.f).get_forward();
+            const auto rolled_forward = make(roll).get_forward();
+            EXPECT_NEAR(rolled_forward.dot(level_forward), 1.f, 1e-5f) << "roll " << roll;
+        }
+    }
+} // namespace
+
+TEST(UnitTestProjection, RollTurnsAroundTheCameraForwardAxisAllEngines)
+{
+    expect_roll_keeps_forward<omath::source_engine::Camera>();
+    expect_roll_keeps_forward<omath::iw_engine::Camera>();
+    expect_roll_keeps_forward<omath::unreal_engine::Camera>();
+    expect_roll_keeps_forward<omath::serious_engine::Camera>();
+    expect_roll_keeps_forward<omath::unity_engine::Camera>();
+    expect_roll_keeps_forward<omath::opengl_engine::Camera>();
+    expect_roll_keeps_forward<omath::frostbite_engine::Camera>();
+    expect_roll_keeps_forward<omath::rage_engine::Camera>();
+    expect_roll_keeps_forward<omath::cry_engine::Camera>();
+}
+
+TEST(UnitTestProjection, CalcViewAnglesFromViewMatrix_FallbackRecoversRollAroundForward)
+{
+    // Without extract_rotation_angles() the camera falls back to look-at plus a roll solved around forward, which is
+    // exact for engines like Source that roll around the camera's own forward axis.
+    using Trait = WithoutRotationExtraction<omath::source_engine::CameraTrait, omath::source_engine::ViewAngles,
+                                            omath::source_engine::Mat4X4>;
+    using FallbackCamera = omath::projection::Camera<omath::source_engine::Mat4X4, omath::source_engine::ViewAngles,
+                                                     Trait, omath::NDCDepthRange::ZERO_TO_ONE>;
+
+    expect_view_angles_round_trip_grid<FallbackCamera>();
+}
+
+TEST(UnitTestProjection, CalcViewAnglesFromViewMatrix_FallbackKeepsForwardForWorldAxisRoll)
+{
+    // A custom trait that rolls around a world axis (roll applied last, Rz(roll) * Ry(yaw) * Rx(pitch)): rolling also
+    // moves forward, so no roll fits on top of the look-at angles. The fallback leaves roll at 0 and still points the
+    // camera the same way.
+    struct WorldAxisRollTrait final
+    {
+        static constexpr omath::unity_engine::ViewAngles
+        calc_look_at_angle(const omath::Vector3<float>& cam_origin, const omath::Vector3<float>& look_at) noexcept
+        {
+            return omath::unity_engine::CameraTrait::calc_look_at_angle(cam_origin, look_at);
+        }
+        static constexpr omath::unity_engine::Mat4X4 calc_view_matrix(const omath::unity_engine::ViewAngles& angles,
+                                                                      const omath::Vector3<float>& cam_origin) noexcept
+        {
+            using namespace omath::unity_engine;
+            const auto rotation = omath::mat_rotation_zyx<float, omath::MatStoreType::ROW_MAJOR>(
+                    angles.roll, angles.yaw, angles.pitch);
+            return omath::mat_camera_view<float, omath::MatStoreType::ROW_MAJOR>(
+                    -omath::mat_rotate_vector(rotation, k_abs_forward), omath::mat_rotate_vector(rotation, k_abs_right),
+                    omath::mat_rotate_vector(rotation, k_abs_up), cam_origin);
+        }
+        static constexpr omath::unity_engine::Mat4X4
+        calc_projection_matrix(const omath::projection::FieldOfView& fov, const omath::projection::ViewPort& view_port,
+                               const float near_plane, const float far_plane,
+                               const omath::NDCDepthRange ndc_depth_range) noexcept
+        {
+            return omath::unity_engine::CameraTrait::calc_projection_matrix(fov, view_port, near_plane, far_plane,
+                                                                            ndc_depth_range);
+        }
+    };
+    using Trait = WorldAxisRollTrait;
+    using FallbackCamera =
+            omath::projection::Camera<omath::unity_engine::Mat4X4, omath::unity_engine::ViewAngles, Trait,
+                                      omath::NDCDepthRange::ZERO_TO_ONE, {.inverted_forward = true}>;
+
+    const FallbackCamera cam({},
+                             omath::unity_engine::ViewAngles{omath::unity_engine::PitchAngle::from_degrees(25.f),
+                                                             omath::unity_engine::YawAngle::from_degrees(-40.f),
+                                                             omath::unity_engine::RollAngle::from_degrees(30.f)},
+                             {1280.f, 1024.f}, omath::projection::FieldOfView::from_degrees(90.f), 0.1f, 1000.f);
+    const auto recovered = FallbackCamera::calc_view_angles_from_view_matrix(cam.get_view_matrix());
+    const FallbackCamera rebuilt({}, recovered, {1280.f, 1024.f}, omath::projection::FieldOfView::from_degrees(90.f),
+                                 0.1f, 1000.f);
+
+    EXPECT_FLOAT_EQ(recovered.roll.as_degrees(), 0.f);
+    EXPECT_NEAR(rebuilt.get_forward().dot(cam.get_forward()), 1.f, 1e-4f);
 }
 
 // ---- Accessors ----

@@ -36,7 +36,7 @@ These basis vectors define the engine's **world coordinate frame**.
 
 ```cpp
 using Mat4X4 = Mat<4, 4, float, MatStoreType::COLUMN_MAJOR>;
-using Mat3X3 = Mat<4, 4, float, MatStoreType::COLUMN_MAJOR>;
+using Mat3X3 = Mat<3, 3, float, MatStoreType::COLUMN_MAJOR>;
 using Mat1X3 = Mat<1, 3, float, MatStoreType::COLUMN_MAJOR>;
 ```
 
@@ -65,7 +65,7 @@ using ViewAngles = omath::ViewAngles<PitchAngle, YawAngle, RollAngle>;
 ## Coordinate system notes
 
 * **Y-up**: gravity points along `-Y`, height increases with `+Y`
-* **Right-handed**: cross product `right × up = forward` (forward is `-Z`)
+* **Right-handed**: cross product `right × up = -forward` (`+Z`, pointing back at the viewer)
 * **Forward = -Z**: the camera looks down the negative Z-axis (OpenGL convention)
 * This matches **OpenGL** conventions for 3D graphics pipelines
 

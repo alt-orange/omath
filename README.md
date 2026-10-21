@@ -114,7 +114,7 @@ See [external_rev_object.md](docs/rev_eng/external_rev_object.md) and [internal_
 - **Collision Detection**: Production ready code to handle collision detection by using simple interfaces.
 - **No Additional Dependencies**: No additional dependencies need to use OMath except unit test execution
 - **Ready for meta-programming**: Omath use templates for common types like Vectors, Matrixes etc, to handle all types!
-- **Engine support**: Supports coordinate systems of **Source, Rage, Unity, Unreal, Frostbite, IWEngine, CryEngine and canonical OpenGL**.
+- **Engine support**: Supports coordinate systems of **Source, Rage, Unity, Unreal, Frostbite, IWEngine, CryEngine, Serious Engine and canonical OpenGL**.
 - **Cross platform**: Supports Windows, MacOS and Linux.
 - **Reverse Engineering**: Typed offset access over internal or external process memory, byte pattern scanning with wildcards in ELF/Mach-O/PE files/modules and loaded processes (works even with Wine apps), and per-engine helpers to resolve names and walk the global object table - see the [Reverse Engineering Toolkit](#reverse-engineering-toolkit) section above.
 - **Hooking**: `omath::hooks::HooksManager` hooks DirectX 9/11/12 and OpenGL's present/swap calls for you, so you only write the draw code.

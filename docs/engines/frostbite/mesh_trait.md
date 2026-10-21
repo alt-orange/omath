@@ -18,8 +18,8 @@
 * **Up axis**: +Y
 * **Forward axis**: +Z
 * **Right axis**: +X
-* **Handedness**: Right-handed
-* **Rotation order**: Pitch (X) → Yaw (Y) → Roll (Z)
+* **Handedness**: Left-handed (the same axes as Unity)
+* **Rotation order**: Roll (Z) → Pitch (X) → Yaw (Y), i.e. `R = Ry(yaw) · Rx(pitch) · Rz(roll)`; roll turns around the object's own forward axis
 
 ---
 
@@ -82,14 +82,14 @@ auto matrix = my_mesh.get_to_world_matrix();
 
 ## Rotation Conventions
 
-Frostbite uses a right-handed Y-up coordinate system:
+Frostbite uses a left-handed Y-up coordinate system:
 
 1. **Pitch** (rotation around X-axis / right axis)
-   * Positive pitch looks upward (+Y direction)
+   * Positive pitch looks downward (-Y direction)
    * Range: typically [-89°, 89°]
 
 2. **Yaw** (rotation around Y-axis / up axis)
-   * Positive yaw rotates counterclockwise when viewed from above (right-handed)
+   * Positive yaw rotates clockwise when viewed from above (left-handed)
    * Range: [-180°, 180°]
 
 3. **Roll** (rotation around Z-axis / forward axis)

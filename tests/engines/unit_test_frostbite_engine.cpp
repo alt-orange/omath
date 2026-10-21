@@ -12,9 +12,9 @@
 TEST(unit_test_frostbite_engine, UnitsToCentimeters_BasicValues)
 {
     EXPECT_FLOAT_EQ(omath::frostbite_engine::units_to_centimeters(0.0f), 0.0f);
-    EXPECT_FLOAT_EQ(omath::frostbite_engine::units_to_centimeters(1.0f), 0.01f);
-    EXPECT_FLOAT_EQ(omath::frostbite_engine::units_to_centimeters(100.0f), 1.0f);
-    EXPECT_FLOAT_EQ(omath::frostbite_engine::units_to_centimeters(-250.0f), -2.5f);
+    EXPECT_FLOAT_EQ(omath::frostbite_engine::units_to_centimeters(1.0f), 100.0f);
+    EXPECT_FLOAT_EQ(omath::frostbite_engine::units_to_centimeters(100.0f), 10000.0f);
+    EXPECT_FLOAT_EQ(omath::frostbite_engine::units_to_centimeters(-250.0f), -25000.0f);
 }
 
 TEST(unit_test_frostbite_engine, UnitsToMeters_BasicValues)
@@ -36,9 +36,9 @@ TEST(unit_test_frostbite_engine, UnitsToKilometers_BasicValues)
 TEST(unit_test_frostbite_engine, CentimetersToUnits_BasicValues)
 {
     EXPECT_FLOAT_EQ(omath::frostbite_engine::centimeters_to_units(0.0f), 0.0f);
-    EXPECT_FLOAT_EQ(omath::frostbite_engine::centimeters_to_units(0.01f), 1.0f);
-    EXPECT_FLOAT_EQ(omath::frostbite_engine::centimeters_to_units(1.0f), 100.0f);
-    EXPECT_FLOAT_EQ(omath::frostbite_engine::centimeters_to_units(-2.5f), -250.0f);
+    EXPECT_FLOAT_EQ(omath::frostbite_engine::centimeters_to_units(0.01f), 0.0001f);
+    EXPECT_FLOAT_EQ(omath::frostbite_engine::centimeters_to_units(1.0f), 0.01f);
+    EXPECT_FLOAT_EQ(omath::frostbite_engine::centimeters_to_units(-2.5f), -0.025f);
 }
 
 TEST(unit_test_frostbite_engine, MetersToUnits_BasicValues)
@@ -101,7 +101,7 @@ TEST(unit_test_frostbite_engine, ConversionChainConsistency)
     const double units = 424242.42;
 
     const auto cm_direct = omath::frostbite_engine::units_to_centimeters(units);
-    const auto cm_via_units = units / 100.0;
+    const auto cm_via_units = units * 100.0;
     EXPECT_NEAR(cm_direct, cm_via_units, 1e-12);
 
     const auto km_direct = omath::frostbite_engine::units_to_kilometers(units);
@@ -124,7 +124,7 @@ TEST(unit_test_frostbite_engine, ConstexprConversions)
     constexpr double m = omath::frostbite_engine::units_to_meters(units);
     constexpr double km = omath::frostbite_engine::units_to_kilometers(units);
 
-    static_assert(cm == 10.0, "units_to_centimeters constexpr failed");
+    static_assert(cm == 100000.0, "units_to_centimeters constexpr failed");
     static_assert(m == 1000.0, "units_to_meters constexpr failed");
     static_assert(km == 1.0, "units_to_kilometers constexpr failed");
 }

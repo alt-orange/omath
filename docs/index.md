@@ -141,6 +141,13 @@ OMath provides built-in support for multiple game engines with proper coordinate
 - [Constants](engines/opengl_engine/constants.md)
 - [Formulas](engines/opengl_engine/formulas.md)
 
+**Serious Engine** (Croteam - Serious Sam)
+- [Camera Trait](engines/serious_engine/camera_trait.md)
+- [Pred Engine Trait](engines/serious_engine/pred_engine_trait.md)
+- [Mesh Trait](engines/serious_engine/mesh_trait.md)
+- [Constants](engines/serious_engine/constants.md)
+- [Formulas](engines/serious_engine/formulas.md)
+
 ### Utilities
 
 **Color**
@@ -166,7 +173,7 @@ OMath provides built-in support for multiple game engines with proper coordinate
 - **Collision Detection**: Production ready code to handle collision detection by using simple interfaces.
 - **No Additional Dependencies**: No additional dependencies need to use OMath except unit test execution
 - **Ready for meta-programming**: Omath use templates for common types like Vectors, Matrixes etc, to handle all types!
-- **Engine support**: Supports coordinate systems of **Source, Unity, Unreal, Frostbite, IWEngine and canonical OpenGL**.
+- **Engine support**: Supports coordinate systems of **Source, Rage, Unity, Unreal, Frostbite, IWEngine, CryEngine, Serious Engine and canonical OpenGL**.
 - **Cross platform**: Supports Windows, MacOS and Linux.
 - **Algorithms**: Has ability to scan for byte pattern with wildcards in PE files/modules, binary slices, works even with Wine apps.
 

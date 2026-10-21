@@ -26,6 +26,12 @@ namespace omath::rage_engine
         {
             return rage_engine::calc_view_matrix(angles, cam_origin);
         }
+        // Inverse of rotation_matrix(); lets Camera::calc_view_angles_from_view_matrix() recover all three angles
+        [[nodiscard("rotation angles result should not be discarded")]]
+        constexpr static ViewAngles extract_rotation_angles(const Mat4X4& rotation) noexcept
+        {
+            return rage_engine::extract_rotation_angles(rotation);
+        }
         [[nodiscard("projection matrix result should not be discarded")]]
         constexpr static Mat4X4 calc_projection_matrix(const projection::FieldOfView& fov,
                                                        const projection::ViewPort& view_port, const float near_plane,

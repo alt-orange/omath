@@ -800,3 +800,82 @@ TEST(UnitTestMatStandalone, ToStringFormatting)
     EXPECT_EQ(a.to_string(), "[[    1.000,     2.000]\n [    3.000,     4.000]]");
     EXPECT_EQ(std::format("{}", a), a.to_string());
 }
+
+namespace
+{
+    using AnyAngle = omath::Angle<float, -180.f, 180.f, omath::AngleFlags::Normalized>;
+
+    void expect_mat3_near(const omath::Mat<4, 4>& actual, const omath::Mat<4, 4>& expected)
+    {
+        for (std::size_t row = 0; row < 4; ++row)
+            for (std::size_t col = 0; col < 4; ++col)
+                EXPECT_NEAR(actual.at(row, col), expected.at(row, col), 1e-5f) << "row " << row << " col " << col;
+    }
+
+    float angle_difference(const float a, const float b)
+    {
+        return std::remainder(a - b, 360.f);
+    }
+} // namespace
+
+TEST(UnitTestMatStandalone, RotationYxzAndZxyMatchTheAxisProducts)
+{
+    for (const auto a : {-150.f, -40.f, 0.f, 25.f, 100.f})
+        for (const auto b : {-80.f, -15.f, 0.f, 60.f})
+            for (const auto c : {-120.f, 0.f, 35.f, 170.f})
+            {
+                const auto first = AnyAngle::from_degrees(a);
+                const auto pitch = AnyAngle::from_degrees(b);
+                const auto last = AnyAngle::from_degrees(c);
+
+                expect_mat3_near(omath::mat_rotation_yxz(first, pitch, last),
+                                 omath::mat_rotation_axis_y(first) * omath::mat_rotation_axis_x(pitch)
+                                         * omath::mat_rotation_axis_z(last));
+                expect_mat3_near(omath::mat_rotation_zxy(first, pitch, last),
+                                 omath::mat_rotation_axis_z(first) * omath::mat_rotation_axis_x(pitch)
+                                         * omath::mat_rotation_axis_y(last));
+            }
+}
+
+TEST(UnitTestMatStandalone, ExtractRotationYxzAndZxyRoundTrip)
+{
+    // x (the pitch) stays within [-90, 90]; the outer angles cover the full turn
+    for (const auto x : {-80.f, -30.f, 0.f, 45.f, 85.f})
+        for (const auto outer : {-170.f, -60.f, 0.f, 100.f, 179.f})
+            for (const auto inner : {-150.f, -20.f, 0.f, 70.f, 160.f})
+            {
+                const auto yxz = omath::mat_extract_rotation_yxz(omath::mat_rotation_yxz(
+                        AnyAngle::from_degrees(outer), AnyAngle::from_degrees(x), AnyAngle::from_degrees(inner)));
+                EXPECT_NEAR(yxz.x, x, 1e-3f);
+                EXPECT_NEAR(angle_difference(yxz.y, outer), 0.f, 1e-3f);
+                EXPECT_NEAR(angle_difference(yxz.z, inner), 0.f, 1e-3f);
+
+                const auto zxy = omath::mat_extract_rotation_zxy(omath::mat_rotation_zxy(
+                        AnyAngle::from_degrees(outer), AnyAngle::from_degrees(x), AnyAngle::from_degrees(inner)));
+                EXPECT_NEAR(zxy.x, x, 1e-3f);
+                EXPECT_NEAR(angle_difference(zxy.z, outer), 0.f, 1e-3f);
+                EXPECT_NEAR(angle_difference(zxy.y, inner), 0.f, 1e-3f);
+            }
+}
+
+TEST(UnitTestMatStandalone, ExtractRotationYxzAndZxyAtTheSingularityKeepTheRotation)
+{
+    for (const auto x : {-90.f, 90.f})
+    {
+        const auto yxz_rotation = omath::mat_rotation_yxz(AnyAngle::from_degrees(40.f), AnyAngle::from_degrees(x),
+                                                          AnyAngle::from_degrees(25.f));
+        const auto yxz = omath::mat_extract_rotation_yxz(yxz_rotation);
+        EXPECT_FLOAT_EQ(yxz.z, 0.f);
+        expect_mat3_near(omath::mat_rotation_yxz(AnyAngle::from_degrees(yxz.y), AnyAngle::from_degrees(yxz.x),
+                                                 AnyAngle::from_degrees(yxz.z)),
+                         yxz_rotation);
+
+        const auto zxy_rotation = omath::mat_rotation_zxy(AnyAngle::from_degrees(40.f), AnyAngle::from_degrees(x),
+                                                          AnyAngle::from_degrees(25.f));
+        const auto zxy = omath::mat_extract_rotation_zxy(zxy_rotation);
+        EXPECT_FLOAT_EQ(zxy.y, 0.f);
+        expect_mat3_near(omath::mat_rotation_zxy(AnyAngle::from_degrees(zxy.z), AnyAngle::from_degrees(zxy.x),
+                                                 AnyAngle::from_degrees(zxy.y)),
+                         zxy_rotation);
+    }
+}

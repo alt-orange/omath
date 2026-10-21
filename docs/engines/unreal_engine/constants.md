@@ -36,7 +36,7 @@ These basis vectors define the engine's **world coordinate frame**.
 
 ```cpp
 using Mat4X4 = Mat<4, 4, float, MatStoreType::ROW_MAJOR>;
-using Mat3X3 = Mat<4, 4, float, MatStoreType::ROW_MAJOR>;
+using Mat3X3 = Mat<3, 3, float, MatStoreType::ROW_MAJOR>;
 using Mat1X3 = Mat<1, 3, float, MatStoreType::ROW_MAJOR>;
 ```
 

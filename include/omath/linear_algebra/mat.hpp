@@ -270,13 +270,13 @@ namespace omath
         {
             static_assert(Rows == Columns, "Determinant is only defined for square matrices.");
 
+            // Keep this a single if-else chain: any statement after a branch that returns is flagged by MSVC as
+            // unreachable code (C4702) once the function gets inlined.
             if constexpr (Rows == 1)
                 return at(0, 0);
-
-            if constexpr (Rows == 2)
+            else if constexpr (Rows == 2)
                 return at(0, 0) * at(1, 1) - at(0, 1) * at(1, 0);
-
-            if constexpr (Rows > 2)
+            else
             {
                 Type det = 0;
                 for (size_t column = 0; column < Columns; ++column)
@@ -286,8 +286,6 @@ namespace omath
                 }
                 return det;
             }
-            else // For no reason MSVC triggers on it as unreachable code so we keep else here.
-                std::unreachable();
         }
 
         [[nodiscard("You must use stripped matrix")]]
@@ -845,6 +843,68 @@ namespace omath
         };
     }
 
+    // Inverse of mat_rotation_yxz(): returns {x, y, z} in degrees with x in [-90, 90]. This is the yaw * pitch * roll
+    // order of Y-up engines, so x is the pitch and the singularity sits at looking straight up or down.
+    template<class Type = float, MatStoreType St = MatStoreType::ROW_MAJOR>
+    requires std::is_floating_point_v<Type>
+    [[nodiscard("You must use extracted rotation")]]
+    constexpr Vector3<Type> mat_extract_rotation_yxz(const Mat<4, 4, Type, St>& mat) noexcept
+    {
+        const auto scale = mat_extract_scale(mat);
+        const auto m00 = mat.at(0, 0) / scale.x;
+        const auto m02 = mat.at(0, 2) / scale.z;
+        const auto m10 = mat.at(1, 0) / scale.x;
+        const auto m11 = mat.at(1, 1) / scale.y;
+        const auto m12 = mat.at(1, 2) / scale.z;
+        const auto m20 = mat.at(2, 0) / scale.x;
+        const auto m22 = mat.at(2, 2) / scale.z;
+
+        const auto x = angles::radians_to_degrees(internal::asin(std::clamp(-m12, Type{-1}, Type{1})));
+
+        // At x = +/-90 degrees cos(x) is 0, so the y and z rotations act around the same axis and only their
+        // combination is recoverable. Pin z to 0 and fold the whole rotation into y.
+        constexpr auto singularity_epsilon = std::numeric_limits<Type>::epsilon() * Type{8};
+        if (Type{1} - internal::abs(m12) < singularity_epsilon) [[unlikely]]
+            return {x, angles::radians_to_degrees(internal::atan2(-m20, m00)), Type{0}};
+
+        return {
+                x,
+                angles::radians_to_degrees(internal::atan2(m02, m22)),
+                angles::radians_to_degrees(internal::atan2(m10, m11)),
+        };
+    }
+
+    // Inverse of mat_rotation_zxy(): returns {x, y, z} in degrees with x in [-90, 90]. This is the yaw * pitch * roll
+    // order of Z-up engines, so x is the pitch and the singularity sits at looking straight up or down.
+    template<class Type = float, MatStoreType St = MatStoreType::ROW_MAJOR>
+    requires std::is_floating_point_v<Type>
+    [[nodiscard("You must use extracted rotation")]]
+    constexpr Vector3<Type> mat_extract_rotation_zxy(const Mat<4, 4, Type, St>& mat) noexcept
+    {
+        const auto scale = mat_extract_scale(mat);
+        const auto m00 = mat.at(0, 0) / scale.x;
+        const auto m01 = mat.at(0, 1) / scale.y;
+        const auto m10 = mat.at(1, 0) / scale.x;
+        const auto m11 = mat.at(1, 1) / scale.y;
+        const auto m20 = mat.at(2, 0) / scale.x;
+        const auto m21 = mat.at(2, 1) / scale.y;
+        const auto m22 = mat.at(2, 2) / scale.z;
+
+        const auto x = angles::radians_to_degrees(internal::asin(std::clamp(m21, Type{-1}, Type{1})));
+
+        // At x = +/-90 degrees cos(x) is 0, so the z and y rotations act around the same axis and only their
+        // combination is recoverable. Pin y to 0 and fold the whole rotation into z.
+        constexpr auto singularity_epsilon = std::numeric_limits<Type>::epsilon() * Type{8};
+        if (Type{1} - internal::abs(m21) < singularity_epsilon) [[unlikely]]
+            return {x, Type{0}, angles::radians_to_degrees(internal::atan2(m10, m00))};
+
+        return {
+                x,
+                angles::radians_to_degrees(internal::atan2(-m20, m22)),
+                angles::radians_to_degrees(internal::atan2(-m01, m11)),
+        };
+    }
+
     template<class Type = float, MatStoreType St = MatStoreType::ROW_MAJOR, class Angle>
     [[nodiscard("You must use rotation matrix")]]
     constexpr Mat<4, 4, Type, St> mat_rotation_axis_x(const Angle& angle) noexcept
@@ -889,6 +949,48 @@ namespace omath
                 {cos_z * cos_y, cos_z * sin_y * sin_x - sin_z * cos_x, cos_z * sin_y * cos_x + sin_z * sin_x, 0},
                 {sin_z * cos_y, sin_z * sin_y * sin_x + cos_z * cos_x, sin_z * sin_y * cos_x - cos_z * sin_x, 0},
                 {-sin_y, cos_y * sin_x, cos_y * cos_x, 0},
+                {0, 0, 0, 1},
+        };
+    }
+
+    // Closed form of mat_rotation_axis_y(y) * mat_rotation_axis_x(x) * mat_rotation_axis_z(z): yaw * pitch * roll for
+    // Y-up engines, with the roll turning around the camera's own forward (Z) axis.
+    template<class Type = float, MatStoreType St = MatStoreType::ROW_MAJOR, class AngleY, class AngleX, class AngleZ>
+    [[nodiscard("You must use rotation matrix")]]
+    constexpr Mat<4, 4, Type, St> mat_rotation_yxz(const AngleY& y, const AngleX& x, const AngleZ& z) noexcept
+    {
+        const auto sin_y = y.sin();
+        const auto cos_y = y.cos();
+        const auto sin_x = x.sin();
+        const auto cos_x = x.cos();
+        const auto sin_z = z.sin();
+        const auto cos_z = z.cos();
+
+        return {
+                {cos_y * cos_z + sin_y * sin_x * sin_z, -cos_y * sin_z + sin_y * sin_x * cos_z, sin_y * cos_x, 0},
+                {cos_x * sin_z, cos_x * cos_z, -sin_x, 0},
+                {-sin_y * cos_z + cos_y * sin_x * sin_z, sin_y * sin_z + cos_y * sin_x * cos_z, cos_y * cos_x, 0},
+                {0, 0, 0, 1},
+        };
+    }
+
+    // Closed form of mat_rotation_axis_z(z) * mat_rotation_axis_x(x) * mat_rotation_axis_y(y): yaw * pitch * roll for
+    // Z-up engines whose forward is Y, with the roll turning around the camera's own forward (Y) axis.
+    template<class Type = float, MatStoreType St = MatStoreType::ROW_MAJOR, class AngleZ, class AngleX, class AngleY>
+    [[nodiscard("You must use rotation matrix")]]
+    constexpr Mat<4, 4, Type, St> mat_rotation_zxy(const AngleZ& z, const AngleX& x, const AngleY& y) noexcept
+    {
+        const auto sin_z = z.sin();
+        const auto cos_z = z.cos();
+        const auto sin_x = x.sin();
+        const auto cos_x = x.cos();
+        const auto sin_y = y.sin();
+        const auto cos_y = y.cos();
+
+        return {
+                {cos_z * cos_y - sin_z * sin_x * sin_y, -sin_z * cos_x, cos_z * sin_y + sin_z * sin_x * cos_y, 0},
+                {sin_z * cos_y + cos_z * sin_x * sin_y, cos_z * cos_x, sin_z * sin_y - cos_z * sin_x * cos_y, 0},
+                {-cos_x * sin_y, sin_x, cos_x * cos_y, 0},
                 {0, 0, 0, 1},
         };
     }

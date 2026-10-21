@@ -19,7 +19,7 @@
 * **Forward axis**: +Z
 * **Right axis**: +X
 * **Handedness**: Left-handed
-* **Rotation order**: Pitch (X) → Yaw (Y) → Roll (Z)
+* **Rotation order**: Roll (Z) → Pitch (X) → Yaw (Y), i.e. `R = Ry(yaw) · Rx(pitch) · Rz(roll)`; roll turns around the object's own forward axis
 
 ---
 
@@ -85,7 +85,7 @@ auto matrix = my_mesh.get_to_world_matrix();
 Unity uses a left-handed coordinate system with Y-up:
 
 1. **Pitch** (rotation around X-axis / right axis)
-   * Positive pitch looks upward (+Y direction)
+   * Positive pitch looks downward (-Y direction)
    * Range: typically [-89°, 89°]
 
 2. **Yaw** (rotation around Y-axis / up axis)

@@ -87,28 +87,42 @@ namespace omath::projection
             NumericType aspect_ratio{};
         };
 
-        // Recovers vertical FOV and aspect ratio from a perspective projection matrix
+        // Recovers the FOV and aspect ratio from a perspective projection matrix
         // built by any of the engine traits.  Both variants (ZERO_TO_ONE and
         // NEGATIVE_ONE_TO_ONE) share the same m[0,0]/m[1,1] layout, so this works
-        // regardless of the NDC depth range.
+        // regardless of the NDC depth range.  The FOV is the same kind the camera
+        // takes (vertical by default), so it can be passed back to set_field_of_view().
         [[nodiscard("You must use extracted projection params")]]
         constexpr static ProjectionParams extract_projection_params(const Mat4X4Type& proj_matrix) noexcept
         {
-            // m[1,1] == 1 / tan(fov/2)  =>  fov = 2 * atan(1 / m[1,1])
             const auto f = proj_matrix.at(1, 1);
             // m[0,0] == m[1,1] / aspect_ratio  =>  aspect = m[1,1] / m[0,0]
-            const auto fov_radians = NumericType{2} * internal::atan(NumericType{1} / f);
-            return {FieldOfView::from_radians(static_cast<typename FieldOfView::ArithmeticType>(fov_radians)),
-                    f / proj_matrix.at(0, 0)};
+            const auto aspect_ratio = f / proj_matrix.at(0, 0);
+
+            // Traits whose FOV is not the plain vertical one (horizontal, or measured at a reference aspect ratio)
+            // provide calc_field_of_view() to undo their own projection.
+            if constexpr (requires {
+                              { TraitClass::calc_field_of_view(proj_matrix) } -> std::same_as<FieldOfView>;
+                          })
+                return {TraitClass::calc_field_of_view(proj_matrix), aspect_ratio};
+            else
+            {
+                // m[1,1] == 1 / tan(fov/2)  =>  fov = 2 * atan(1 / m[1,1])
+                const auto fov_radians = NumericType{2} * internal::atan(NumericType{1} / f);
+                return {FieldOfView::from_radians(static_cast<typename FieldOfView::ArithmeticType>(fov_radians)),
+                        aspect_ratio};
+            }
         }
 
         [[nodiscard("You must use calculated view angles")]]
         constexpr static ViewAnglesType calc_view_angles_from_view_matrix(const Mat4X4Type& view_matrix) noexcept
         {
-            Vector3<NumericType> forward_vector = {view_matrix[2, 0], view_matrix[2, 1], view_matrix[2, 2]};
-            if constexpr (axes.inverted_forward)
-                forward_vector = -forward_vector;
-            return TraitClass::calc_look_at_angle({}, forward_vector);
+            if constexpr (requires {
+                              { TraitClass::extract_rotation_angles(view_matrix) } -> std::same_as<ViewAnglesType>;
+                          })
+                return calc_view_angles_by_decomposition(view_matrix);
+            else
+                return calc_view_angles_by_look_at(view_matrix);
         }
 
         [[nodiscard("You must use calculated origin")]]
@@ -126,6 +140,80 @@ namespace omath::projection
             };
         }
 
+    private:
+        // Exact path, for traits that provide extract_rotation_angles() (the inverse of their rotation matrix).
+        // A view matrix's rotation block is V = M * R^T: R is the engine's rotation for the angles and M is the
+        // engine's fixed mapping from world axes to view rows (including any row it flips), which is just the view
+        // matrix of a camera with all angles at 0. M is orthonormal, so R = V^T * M, and the trait turns R back into
+        // angles - roll included, whatever order the engine composes its rotations in.
+        [[nodiscard("You must use calculated view angles")]]
+        constexpr static ViewAnglesType calc_view_angles_by_decomposition(const Mat4X4Type& view_matrix) noexcept
+        {
+            const auto reference = TraitClass::calc_view_matrix(ViewAnglesType{}, {});
+
+            Mat4X4Type rotation;
+            for (std::size_t row = 0; row < 3; ++row)
+                for (std::size_t column = 0; column < 3; ++column)
+                    rotation.at(row, column) = view_matrix.at(0, row) * reference.at(0, column)
+                                               + view_matrix.at(1, row) * reference.at(1, column)
+                                               + view_matrix.at(2, row) * reference.at(2, column);
+            rotation.at(3, 3) = NumericType{1};
+
+            return TraitClass::extract_rotation_angles(rotation);
+        }
+
+        // Fallback for traits without extract_rotation_angles(): look-at recovers pitch and yaw from the forward row,
+        // then roll is solved around forward. This only works for engines that roll around the camera's own forward
+        // axis; for the others roll is left at 0 and only the viewing direction is recovered.
+        [[nodiscard("You must use calculated view angles")]]
+        constexpr static ViewAnglesType calc_view_angles_by_look_at(const Mat4X4Type& view_matrix) noexcept
+        {
+            Vector3<NumericType> forward_vector = {view_matrix[2, 0], view_matrix[2, 1], view_matrix[2, 2]};
+            if constexpr (axes.inverted_forward)
+                forward_vector = -forward_vector;
+            auto angles = TraitClass::calc_look_at_angle({}, forward_vector);
+
+            // Look-at only pins the forward axis and leaves roll at 0. Roll is the angle, around forward, between the
+            // matrix's up row and the up row of the same orientation without roll. Which way a positive roll turns is
+            // engine-specific, so try both signs and keep the one that rebuilds the matrix's up row.
+            const auto level = TraitClass::calc_view_matrix(angles, {});
+            const Vector3<NumericType> up = {view_matrix[1, 0], view_matrix[1, 1], view_matrix[1, 2]};
+            const Vector3<NumericType> level_up = {level[1, 0], level[1, 1], level[1, 2]};
+            const Vector3<NumericType> level_right = {level[0, 0], level[0, 1], level[0, 2]};
+            const auto roll_radians = internal::atan2(up.dot(level_right), up.dot(level_up));
+
+            using RollType = decltype(angles.roll);
+            using RollArithmetic = typename RollType::ArithmeticType;
+            const auto rebuild_with_roll = [&](const NumericType radians)
+            {
+                auto candidate = angles;
+                candidate.roll = RollType::from_radians(static_cast<RollArithmetic>(radians));
+                return TraitClass::calc_view_matrix(candidate, {});
+            };
+            const auto up_alignment = [&](const Mat4X4Type& rebuilt)
+            {
+                return up.dot(Vector3<NumericType>{rebuilt[1, 0], rebuilt[1, 1], rebuilt[1, 2]});
+            };
+
+            const auto positive = rebuild_with_roll(roll_radians);
+            const auto negative = rebuild_with_roll(-roll_radians);
+            const bool positive_wins = up_alignment(positive) >= up_alignment(negative);
+            const auto& rebuilt = positive_wins ? positive : negative;
+
+            // Engines that apply roll around a world axis instead of the camera's forward axis move forward when
+            // rolling, so no roll fits on top of the look-at angles. Keep roll at 0 for them, as before.
+            const Vector3<NumericType> forward_row = {view_matrix[2, 0], view_matrix[2, 1], view_matrix[2, 2]};
+            const Vector3<NumericType> rebuilt_forward_row = {rebuilt[2, 0], rebuilt[2, 1], rebuilt[2, 2]};
+            constexpr auto k_forward_tolerance = static_cast<NumericType>(1e-4);
+            if (forward_row.dot(rebuilt_forward_row) < NumericType{1} - k_forward_tolerance)
+                return angles;
+
+            angles.roll =
+                    RollType::from_radians(static_cast<RollArithmetic>(positive_wins ? roll_radians : -roll_radians));
+            return angles;
+        }
+
+    public:
         constexpr void look_at(const Vector3<NumericType>& target) noexcept
         {
             m_view_angles = TraitClass::calc_look_at_angle(m_origin, target);
@@ -620,12 +708,14 @@ namespace omath::projection
         constexpr static bool is_ndc_z_value_out_of_bounds(const NumericType z_ndc) noexcept
         {
             constexpr auto eps = std::numeric_limits<NumericType>::epsilon();
+            // A single if-else chain: a trailing std::unreachable() after the returning branches trips MSVC's C4702.
             if constexpr (depth_range == NDCDepthRange::NEGATIVE_ONE_TO_ONE)
                 return z_ndc < -NumericType{1} - eps || z_ndc > NumericType{1} + eps;
-            if constexpr (depth_range == NDCDepthRange::ZERO_TO_ONE)
+            else
+            {
+                static_assert(depth_range == NDCDepthRange::ZERO_TO_ONE, "Unhandled NDC depth range");
                 return z_ndc < NumericType{0} - eps || z_ndc > NumericType{1} + eps;
-
-            std::unreachable();
+            }
         }
 
         // Homogeneous point transform: matrix * (x, y, z, 1). Same result as multiplying by mat_column_from_vector(),

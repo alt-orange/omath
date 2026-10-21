@@ -136,6 +136,7 @@ namespace omath::lua::detail
     void register_iw_engine(sol::table& omath_table);
     void register_source_engine(sol::table& omath_table);
     void register_rage_engine(sol::table& omath_table);
+    void register_serious_engine(sol::table& omath_table);
     void register_unity_engine(sol::table& omath_table);
     void register_unreal_engine(sol::table& omath_table);
     void register_cry_engine(sol::table& omath_table);

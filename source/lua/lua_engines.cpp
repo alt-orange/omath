@@ -68,6 +68,7 @@ namespace omath::lua
         detail::register_iw_engine(omath_table);
         detail::register_source_engine(omath_table);
         detail::register_rage_engine(omath_table);
+        detail::register_serious_engine(omath_table);
         detail::register_unity_engine(omath_table);
         detail::register_unreal_engine(omath_table);
         detail::register_cry_engine(omath_table);

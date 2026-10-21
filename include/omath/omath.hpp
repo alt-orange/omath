@@ -97,6 +97,20 @@
 #include "omath/engines/rage_engine/traits/camera_trait.hpp"
 #include "omath/engines/rage_engine/traits/pred_engine_trait.hpp"
 
+// Serious Engine
+#include "omath/engines/serious_engine/constants.hpp"
+#include "omath/engines/serious_engine/formulas.hpp"
+#include "omath/engines/serious_engine/camera.hpp"
+#include "omath/engines/serious_engine/traits/camera_trait.hpp"
+#include "omath/engines/serious_engine/traits/pred_engine_trait.hpp"
+
+// CryEngine
+#include "omath/engines/cry_engine/constants.hpp"
+#include "omath/engines/cry_engine/formulas.hpp"
+#include "omath/engines/cry_engine/camera.hpp"
+#include "omath/engines/cry_engine/traits/camera_trait.hpp"
+#include "omath/engines/cry_engine/traits/pred_engine_trait.hpp"
+
 // Unreal Engine
 #include "omath/engines/unreal_engine/actor_name.hpp"
 #include "omath/engines/unreal_engine/constants.hpp"

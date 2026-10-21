@@ -1,0 +1,27 @@
+//
+// Created by Orange on 10/21/2026.
+//
+#pragma once
+
+#include "omath/linear_algebra/mat.hpp"
+#include "omath/linear_algebra/vector3.hpp"
+#include <omath/trigonometry/angle.hpp>
+#include <omath/trigonometry/view_angles.hpp>
+
+namespace omath::serious_engine
+{
+    // Right-handed, Y-up, camera looks down -Z (same axes as OpenGL). One world unit is one meter.
+    constexpr Vector3<float> k_abs_up = {0, 1, 0};
+    constexpr Vector3<float> k_abs_right = {1, 0, 0};
+    constexpr Vector3<float> k_abs_forward = {0, 0, -1};
+
+    using Mat4X4 = Mat<4, 4, float, MatStoreType::ROW_MAJOR>;
+    using Mat3X3 = Mat<3, 3, float, MatStoreType::ROW_MAJOR>;
+    using Mat1X3 = Mat<1, 3, float, MatStoreType::ROW_MAJOR>;
+    // ANGLE3D (heading, pitch, banking): positive heading turns left, positive pitch looks up.
+    using PitchAngle = Angle<float, -90.f, 90.f, AngleFlags::Clamped>;
+    using YawAngle = Angle<float, -180.f, 180.f, AngleFlags::Normalized>;
+    using RollAngle = Angle<float, -180.f, 180.f, AngleFlags::Normalized>;
+
+    using ViewAngles = omath::ViewAngles<PitchAngle, YawAngle, RollAngle>;
+} // namespace omath::serious_engine

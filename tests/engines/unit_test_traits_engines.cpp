@@ -16,6 +16,8 @@
 #include <omath/engines/opengl_engine/traits/pred_engine_trait.hpp>
 #include <omath/engines/rage_engine/camera.hpp>
 #include <omath/engines/rage_engine/traits/camera_trait.hpp>
+#include <omath/engines/serious_engine/camera.hpp>
+#include <omath/engines/serious_engine/traits/camera_trait.hpp>
 #include <omath/engines/source_engine/camera.hpp>
 #include <omath/engines/source_engine/traits/camera_trait.hpp>
 #include <omath/engines/source_engine/traits/pred_engine_trait.hpp>
@@ -76,6 +78,7 @@ static_assert(camera_can_calculate_matrices_at_compile_time<opengl_engine::Camer
 static_assert(camera_can_calculate_matrices_at_compile_time<unity_engine::Camera, float>());
 static_assert(camera_can_calculate_matrices_at_compile_time<cry_engine::Camera, float>());
 static_assert(camera_can_calculate_matrices_at_compile_time<rage_engine::Camera, float>());
+static_assert(camera_can_calculate_matrices_at_compile_time<serious_engine::Camera, float>());
 static_assert(camera_can_calculate_matrices_at_compile_time<unreal_engine::Camera, double>());
 
 #include <omath/engines/cry_engine/traits/pred_engine_trait.hpp>

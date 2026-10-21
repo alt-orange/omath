@@ -20,6 +20,9 @@
 #include <omath/engines/rage_engine/formulas.hpp>
 #include <omath/engines/rage_engine/traits/camera_trait.hpp>
 #include <omath/engines/rage_engine/traits/pred_engine_trait.hpp>
+#include <omath/engines/serious_engine/formulas.hpp>
+#include <omath/engines/serious_engine/traits/camera_trait.hpp>
+#include <omath/engines/serious_engine/traits/pred_engine_trait.hpp>
 #include <omath/engines/source_engine/formulas.hpp>
 #include <omath/engines/source_engine/traits/camera_trait.hpp>
 #include <omath/engines/source_engine/traits/pred_engine_trait.hpp>
@@ -87,6 +90,7 @@ namespace
     OMATH_TEST_ENGINE(Unity, unity_engine, float)
     OMATH_TEST_ENGINE(Frostbite, frostbite_engine, float)
     OMATH_TEST_ENGINE(OpenGl, opengl_engine, float)
+    OMATH_TEST_ENGINE(Serious, serious_engine, float)
     OMATH_TEST_ENGINE(Unreal, unreal_engine, double)
 
 #undef OMATH_TEST_ENGINE
@@ -105,7 +109,7 @@ namespace
     {
     };
 
-    using Engines = ::testing::Types<Source, Iw, Rage, Cry, Unity, Frostbite, OpenGl, Unreal>;
+    using Engines = ::testing::Types<Source, Iw, Rage, Cry, Unity, Frostbite, OpenGl, Serious, Unreal>;
     TYPED_TEST_SUITE(PredEngineTraitAll, Engines, EngineNames);
 
     constexpr double k_pitches[] = {-60., -20., 0., 35., 70.};

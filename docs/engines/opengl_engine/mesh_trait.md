@@ -19,7 +19,7 @@
 * **Forward axis**: +Z (toward viewer)
 * **Right axis**: +X
 * **Handedness**: Right-handed
-* **Rotation order**: Pitch (X) → Yaw (Y) → Roll (Z)
+* **Rotation order**: Roll (Z) → Pitch (X) → Yaw (Y), i.e. `R = Ry(yaw) · Rx(pitch) · Rz(roll)`; roll turns around the object's own forward axis
 
 ---
 

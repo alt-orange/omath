@@ -73,8 +73,7 @@ namespace omath::iw_engine
             const float field_of_view, const float aspect_ratio, const float near_plane, const float far_plane,
             const NDCDepthRange ndc_depth_range = NDCDepthRange::NEGATIVE_ONE_TO_ONE) noexcept
     {
-        constexpr float k_source_reference_aspect = 4.f / 3.f;
-        const auto vertical_fov = angles::horizontal_fov_to_vertical(field_of_view, k_source_reference_aspect);
+        const auto vertical_fov = angles::horizontal_fov_to_vertical(field_of_view, k_fov_reference_aspect_ratio);
 
         if (ndc_depth_range == NDCDepthRange::ZERO_TO_ONE)
             return mat_perspective_left_handed_vertical_fov<float, MatStoreType::ROW_MAJOR, NDCDepthRange::ZERO_TO_ONE>(

@@ -92,10 +92,10 @@ static_assert(
         }(),
         "CryEngine CameraTrait should be constexpr with embedded constexpr math");
 
-static_assert(omath::cry_engine::units_to_centimeters(100.0f) == 1.0f);
+static_assert(omath::cry_engine::units_to_centimeters(1.0f) == 100.0f);
 static_assert(omath::cry_engine::units_to_meters(2.0f) == 2.0f);
 static_assert(omath::cry_engine::units_to_kilometers(2000.0f) == 2.0f);
-static_assert(omath::cry_engine::centimeters_to_units(1.0f) == 100.0f);
+static_assert(omath::cry_engine::centimeters_to_units(100.0f) == 1.0f);
 static_assert(omath::cry_engine::meters_to_units(2.0f) == 2.0f);
 static_assert(omath::cry_engine::kilometers_to_units(2.0f) == 2000.0f);
 
