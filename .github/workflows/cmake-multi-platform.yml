@@ -2,9 +2,9 @@ name: Omath CI
 
 on:
   push:
-    branches: [ main ]
+    branches: [ github-main ]
   pull_request:
-    branches: [ main ]
+    branches: [ github-main ]
 
 concurrency:
   group: ci-${{ github.ref }}
