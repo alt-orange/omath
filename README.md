@@ -2,20 +2,14 @@
 
 ![banner](https://blog.libomath.org/wp-content/uploads/2026/08/omath_logo.png)
 
-![GitHub License](https://img.shields.io/github/license/alt-orange/omath)
-![GitHub contributors](https://img.shields.io/github/contributors/alt-orange/omath)
-![GitHub top language](https://img.shields.io/github/languages/top/alt-orange/omath)
-![GitHub repo size](https://img.shields.io/github/repo-size/alt-orange/omath)
-[![CodeFactor](https://www.codefactor.io/repository/github/alt-orange/omath/badge)](https://www.codefactor.io/repository/github/alt-orange/omath)
+[![License](https://img.shields.io/github/license/alt-orange/omath)](https://git.libomath.org/orange/omath/src/branch/main/LICENSE)
+![Release](https://img.shields.io/gitea/v/release/orange/omath?gitea_url=https://git.libomath.org&sort=semver)
+![Last commit](https://img.shields.io/gitea/last-commit/orange/omath?gitea_url=https://git.libomath.org)
 ![GitHub Actions Workflow Status](https://img.shields.io/github/actions/workflow/status/alt-orange/omath/cmake-multi-platform.yml)
 [![Vcpkg package](https://repology.org/badge/version-for-repo/vcpkg/orange-math.svg)](https://repology.org/project/orange-math/versions)
 ![Conan Center](https://img.shields.io/conan/v/omath)
-![GitHub forks](https://img.shields.io/github/forks/alt-orange/omath)
-![GitHub Repo stars](https://img.shields.io/github/stars/alt-orange/omath)
-![GitHub watchers](https://img.shields.io/github/watchers/alt-orange/omath)
-![GitHub Release](https://img.shields.io/github/v/release/alt-orange/omath)
 [![discord badge](https://dcbadge.limes.pink/api/server/https://discord.gg/eDgdaWbqwZ?style=flat)](https://discord.gg/eDgdaWbqwZ)
-[![telegram badge](https://img.shields.io/badge/Telegram-2CA5E0?style=flat-squeare&logo=telegram&logoColor=white)](https://t.me/orangennotes)
+[![telegram badge](https://img.shields.io/badge/Telegram-2CA5E0?style=flat-square&logo=telegram&logoColor=white)](https://t.me/orangennotes)
 
 omath is a 100% independent, constexpr template blazingly fast math/physics/games/mods/cheats development framework that doesn't have legacy C++ code.
 
