@@ -26,30 +26,43 @@ namespace omath::opengl_engine {
 
   // Compute forward direction from pitch/yaw/roll
   [[nodiscard]]
-  Vector3<float> forward_vector(const ViewAngles& angles) noexcept;
+  constexpr Vector3<float> forward_vector(const ViewAngles& angles) noexcept;
 
   // Compute right direction from pitch/yaw/roll
   [[nodiscard]]
-  Vector3<float> right_vector(const ViewAngles& angles) noexcept;
+  constexpr Vector3<float> right_vector(const ViewAngles& angles) noexcept;
 
   // Compute up direction from pitch/yaw/roll
   [[nodiscard]]
-  Vector3<float> up_vector(const ViewAngles& angles) noexcept;
+  constexpr Vector3<float> up_vector(const ViewAngles& angles) noexcept;
 
-  // Build 3x3 rotation matrix from angles
+  // Build 4x4 rotation matrix from angles (mat_rotation_yxz: yaw * pitch * roll, column-major)
   [[nodiscard]]
-  Mat4X4 rotation_matrix(const ViewAngles& angles) noexcept;
+  constexpr Mat4X4 rotation_matrix(const ViewAngles& angles) noexcept;
 
-  // Build view matrix (camera space transform)
+  // Decompose a transform matrix
+  [[nodiscard]] constexpr Vector3<float> extract_origin(const Mat4X4& mat) noexcept;
+  [[nodiscard]] constexpr Vector3<float> extract_scale(const Mat4X4& mat) noexcept;
+  [[nodiscard]] constexpr ViewAngles     extract_rotation_angles(const Mat4X4& mat) noexcept;
+
+  // Build view matrix (camera space transform, mat_look_at_right_handed)
   [[nodiscard]]
-  Mat4X4 calc_view_matrix(const ViewAngles& angles,
-                          const Vector3<float>& cam_origin) noexcept;
+  constexpr Mat4X4 calc_view_matrix(const ViewAngles& angles,
+                                    const Vector3<float>& cam_origin) noexcept;
 
   // Build perspective projection matrix
   [[nodiscard]]
-  Mat4X4 calc_perspective_projection_matrix(float field_of_view,
-                                           float aspect_ratio,
-                                           float near, float far) noexcept;
+  constexpr Mat4X4 calc_perspective_projection_matrix(
+      float field_of_view, float aspect_ratio, float near_plane, float far_plane,
+      NDCDepthRange ndc_depth_range = NDCDepthRange::NEGATIVE_ONE_TO_ONE) noexcept;
+
+  // Unit conversions (FloatingType = any floating-point type)
+  template<class FloatingType> constexpr FloatingType units_to_centimeters(const FloatingType& units);
+  template<class FloatingType> constexpr FloatingType units_to_meters(const FloatingType& units);
+  template<class FloatingType> constexpr FloatingType units_to_kilometers(const FloatingType& units);
+  template<class FloatingType> constexpr FloatingType centimeters_to_units(const FloatingType& centimeters);
+  template<class FloatingType> constexpr FloatingType meters_to_units(const FloatingType& meters);
+  template<class FloatingType> constexpr FloatingType kilometers_to_units(const FloatingType& kilometers);
 
 } // namespace omath::opengl_engine
 ```
@@ -70,8 +83,9 @@ These are used for movement, aim direction, and building coordinate frames.
 
 ## Rotation & view matrices
 
-* `rotation_matrix(angles)` → 3×3 (or 4×4) rotation matrix from Euler angles (column-major)
-* `calc_view_matrix(angles, origin)` → camera view matrix (column-major)
+* `rotation_matrix(angles)` → 4×4 rotation matrix from Euler angles (`mat_rotation_yxz(yaw, pitch, roll)`, column-major; roll turns around the camera's own forward axis)
+* `calc_view_matrix(angles, origin)` → camera view matrix (column-major, built with `mat_look_at_right_handed` from the rotated forward and up)
+* `extract_origin`, `extract_scale`, `extract_rotation_angles` → read the translation, scale and Euler angles back out of a transform matrix (the inverse of the above)
 
 The view matrix transforms world coordinates into camera space (origin at camera, axes aligned with camera orientation).
 
@@ -86,9 +100,12 @@ Mat4X4 proj = calc_perspective_projection_matrix(
   fov_degrees,    // vertical field of view (e.g., 45)
   aspect_ratio,   // width / height (e.g., 16/9)
   near_plane,     // e.g., 0.1
-  far_plane       // e.g., 100.0
+  far_plane,      // e.g., 100.0
+  NDCDepthRange::NEGATIVE_ONE_TO_ONE // optional, this is the default
 );
 ```
+
+The matrix is a right-handed, column-major, vertical-FOV perspective matrix (`mat_perspective_right_handed_vertical_fov`); `ndc_depth_range` selects the depth range of the resulting clip space.
 
 Produces a **perspective projection matrix** suitable for OpenGL rendering. Combined with the view matrix, this implements the standard camera transform chain.
 
@@ -117,9 +134,15 @@ auto view_mat = calc_view_matrix(angles, cam_pos);
 auto proj_mat = calc_perspective_projection_matrix(45.0f, 16.0f/9.0f, 0.1f, 100.0f);
 
 // Upload to OpenGL shaders (no transpose needed)
-glUniformMatrix4fv(view_loc, 1, GL_FALSE, view_mat.data());
-glUniformMatrix4fv(proj_loc, 1, GL_FALSE, proj_mat.data());
+glUniformMatrix4fv(view_loc, 1, GL_FALSE, view_mat.raw_array().data());
+glUniformMatrix4fv(proj_loc, 1, GL_FALSE, proj_mat.raw_array().data());
 ```
+
+---
+
+## Unit conversions
+
+One OpenGL unit is one meter: `units_to_meters` / `meters_to_units` return the value unchanged, `units_to_centimeters` multiplies by 100 and `centimeters_to_units` divides by 100. `units_to_kilometers` / `kilometers_to_units` scale by 1000. They are `constexpr` templates restricted to floating-point types.
 
 ---
 

@@ -16,10 +16,10 @@
 
 **IW Engine** (Call of Duty) uses:
 * **Up axis**: +Z
-* **Forward axis**: +Y
-* **Right axis**: +X
+* **Forward axis**: +X
+* **Right axis**: -Y
 * **Handedness**: Right-handed
-* **Rotation order**: Pitch (X) → Yaw (Z) → Roll (Y)
+* **Rotation**: `Rz(yaw) · Ry(pitch) · Rx(roll)` (`mat_rotation_zyx`)
 
 ---
 
@@ -84,17 +84,18 @@ auto matrix = my_mesh.get_to_world_matrix();
 
 IW Engine uses a right-handed Z-up coordinate system (similar to Source Engine):
 
-1. **Pitch** (rotation around X-axis / right axis)
-   * Positive pitch looks upward (+Z direction)
-   * Range: typically [-89°, 89°]
+1. **Pitch** (rotation around the Y axis, the left/right axis)
+   * **Negative** pitch looks upward (+Z direction)
+   * Range: [-89°, 89°]
 
 2. **Yaw** (rotation around Z-axis / up axis)
    * Positive yaw rotates counterclockwise when viewed from above
    * Range: [-180°, 180°]
 
-3. **Roll** (rotation around Y-axis / forward axis)
-   * Positive roll tilts right
+3. **Roll** (rotation around X-axis / forward axis)
    * Range: [-180°, 180°]
+
+**Composition**: `Rz(yaw) · Ry(pitch) · Rx(roll)` - roll is applied first, then pitch, then yaw.
 
 ---
 
@@ -102,9 +103,18 @@ IW Engine uses a right-handed Z-up coordinate system (similar to Source Engine):
 
 ```cpp
 namespace omath::iw_engine {
-    using Mesh = primitives::Mesh<Mat4X4, ViewAngles, MeshTrait, float>;
+    // mesh.hpp
+    using Mesh = primitives::Mesh<Mat4X4, ViewAngles, MeshTrait>;
+
+    // primitives.hpp
+    using BoxMesh   = primitives::Mesh<Mat4X4, ViewAngles, MeshTrait, primitives::Vertex<>,
+                                       std::array<Vector3<float>, 8>, std::array<Vector3<std::uint32_t>, 12>>;
+    using PlaneMesh = primitives::Mesh<Mat4X4, ViewAngles, MeshTrait, primitives::Vertex<>,
+                                       std::array<Vector3<float>, 4>, std::array<Vector3<std::uint32_t>, 2>>;
 }
 ```
+
+`BoxMesh` (8 vertices, 12 triangles) and `PlaneMesh` (4 vertices, 2 triangles) are fixed-size meshes declared in `primitives.hpp`. IW Engine has no `collider.hpp`, so there is no ready-made `MeshCollider` alias; wrap a mesh with `collision::MeshCollider<Mesh>` yourself if needed.
 
 ---
 

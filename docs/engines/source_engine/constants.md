@@ -25,10 +25,13 @@ namespace omath::source_engine {
   constexpr Vector3<float> k_abs_up      = {0, 0, 1};
   constexpr Vector3<float> k_abs_right   = {0, -1, 0};
   constexpr Vector3<float> k_abs_forward = {1, 0, 0};
+
+  // The FOV is horizontal at this aspect ratio, whatever the actual viewport is
+  constexpr float k_fov_reference_aspect_ratio = 4.f / 3.f;
 }
 ```
 
-These basis vectors define the engine's **world coordinate frame**.
+These basis vectors define the engine's **world coordinate frame**. `k_fov_reference_aspect_ratio` is the 4:3 aspect ratio at which the engine's FOV value is horizontal; the projection builder and `CameraTrait::calc_field_of_view` use it to convert to and from the vertical FOV (see [Formulas](formulas.md)).
 
 ---
 
@@ -54,7 +57,7 @@ using RollAngle  = Angle<float, -180.f, 180.f, AngleFlags::Normalized>;
 using ViewAngles = omath::ViewAngles<PitchAngle, YawAngle, RollAngle>;
 ```
 
-* **PitchAngle**: clamped to **[-89°, +89°]** (looking down vs. up)
+* **PitchAngle**: clamped to **[-89°, +89°]** (negative pitch looks **up**, positive looks down)
 * **YawAngle**: normalized to **[-180°, +180°]** (horizontal rotation)
 * **RollAngle**: normalized to **[-180°, +180°]** (camera roll)
 
@@ -65,7 +68,7 @@ using ViewAngles = omath::ViewAngles<PitchAngle, YawAngle, RollAngle>;
 ## Coordinate system notes
 
 * **Z-up**: gravity points along `-Z`, height increases with `+Z`
-* **Right-handed**: cross product `forward × right = up` holds
+* **Right-handed**: `right × forward = up` holds (with `right = -Y`, `forward = +X`, `up = +Z`)
 * This matches **Source Engine** (Half-Life 2, TF2, CS:GO, etc.) conventions
 
 ---

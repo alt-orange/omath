@@ -54,7 +54,7 @@ using RollAngle  = Angle<float, -180.f, 180.f, AngleFlags::Normalized>;
 using ViewAngles = omath::ViewAngles<PitchAngle, YawAngle, RollAngle>;
 ```
 
-* **PitchAngle**: clamped to **[-90°, +90°]** (looking down vs. up)
+* **PitchAngle**: clamped to **[-90°, +90°]** (negative pitch looks **up**, positive looks down)
 * **YawAngle**: normalized to **[-180°, +180°]** (horizontal rotation)
 * **RollAngle**: normalized to **[-180°, +180°]** (camera roll)
 

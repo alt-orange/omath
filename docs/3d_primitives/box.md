@@ -1,31 +1,34 @@
-# `omath::primitives::create_box` — Build an oriented box as 12 triangles
+# `omath::primitives::create_box` — Build an oriented box mesh (8 vertices, 12 triangles)
 
-> Header: your project’s `primitives/box.hpp` (declares `create_box`)
+> Header: `omath/3d_primitives/box.hpp` (declares `create_box`)
 > Namespace: `omath::primitives`
-> Depends on: `omath::Triangle<omath::Vector3<float>>`, `omath::Vector3<float>`
+> Depends on: [`omath::primitives::Mesh`](mesh.md), `omath::Vector3<float>`
+> Engine aliases: `omath::<engine>::BoxMesh` in `omath/engines/<engine>/primitives.hpp` (frostbite, iw, opengl, serious, source, unity, unreal)
 
 ```cpp
+template<class BoxMeshType>
 [[nodiscard]]
-std::array<Triangle<Vector3<float>>, 12>
-create_box(const Vector3<float>& top,
-           const Vector3<float>& bottom,
-           const Vector3<float>& dir_forward,
-           const Vector3<float>& dir_right,
-           float ratio = 4.f) noexcept;
+BoxMeshType create_box(const Vector3<float>& top,
+                       const Vector3<float>& bottom,
+                       const Vector3<float>& dir_forward,
+                       const Vector3<float>& dir_right,
+                       float ratio = 4.f) noexcept;
 ```
 
 ---
 
 ## What it does
 
-Constructs a **rectangular cuboid (“box”)** oriented in 3D space and returns its surface as **12 triangles** (2 per face × 6 faces). The box’s central axis runs from `bottom` → `top`. The **up** direction is inferred from that segment; the **forward** and **right** directions define the box’s orientation around that axis.
+Builds a **rectangular cuboid ("box")** from a central axis (`bottom` -> `top`) and two orientation directions, and returns it as a `BoxMeshType` mesh with **8 vertices and 12 triangles** (2 per face x 6 faces).
 
-The lateral half-extents are derived from the axis length and `ratio`:
+`BoxMeshType` is a template parameter: pick the mesh type of your engine, for example `omath::opengl_engine::BoxMesh`. It is constructed as `BoxMeshType{std::array<Vector3<float>, 8>, std::array<Vector3<std::uint32_t>, 12>}`, so it must be a `primitives::Mesh` whose vertex buffer is `std::array<Vector3<float>, 8>` and whose element buffer is `std::array<Vector3<std::uint32_t>, 12>` (exactly what the engine `BoxMesh` aliases are).
 
-> Let `H = |top - bottom|`. Lateral half-size ≈ `H / ratio` along both `dir_forward` and `dir_right`
-> (i.e., the cross-section is a square of side `2H/ratio`).
+Sizing rule (from the implementation):
 
-> **Note:** This describes the intended behavior from the interface. If you rely on a different sizing rule, document it next to your implementation.
+> `height = |top - bottom|`, `side_size = height / ratio`.
+> Each corner is `center +/- dir_forward * side_size +/- dir_right * side_size`, where `center` is `bottom` for the lower four and `top` for the upper four.
+
+With unit-length, orthogonal `dir_forward` / `dir_right` the cross-section is therefore a square of side `2 * side_size = 2 * height / ratio`.
 
 ---
 
@@ -38,81 +41,80 @@ The lateral half-extents are derived from the axis length and `ratio`:
   Center of the **bottom face**.
 
 * `dir_forward`
-  A direction that orients the box around its up axis. Should be **non-zero** and **not collinear** with `top - bottom`.
+  Direction that orients the box around its axis; also scales the extent (see above). Use a **unit** vector perpendicular to `top - bottom`.
 
 * `dir_right`
-  A direction roughly orthogonal to both `dir_forward` and `top - bottom`. Used to fully fix orientation.
+  Second orientation direction; use a **unit** vector perpendicular to both `dir_forward` and `top - bottom`.
 
 * `ratio` (default `4.0f`)
-  Controls thickness relative to height. Larger values → thinner box.
-  With the default rule above, half-extent = `|top-bottom|/ratio`.
+  Divisor applied to the height to get the half-extent. Larger values give a thinner box.
+
+!!! note "No re-orthonormalization"
+    The directions are used as given: they are neither normalized nor made orthogonal, so non-unit or skewed inputs produce a scaled or skewed box.
 
 ---
 
 ## Return value
 
-`std::array<Triangle<Vector3<float>>, 12>` — the six faces of the box, triangulated.
-Winding is intended to be **outward-facing** (right-handed coordinates). Do not rely on a specific **face ordering**; treat the array as opaque unless your implementation guarantees an order.
+A `BoxMeshType` mesh. Vertex layout (index -> corner):
 
----
+| Index | Corner |
+|---|---|
+| 0 | front-right-bottom |
+| 1 | front-left-bottom |
+| 2 | back-right-bottom |
+| 3 | back-left-bottom |
+| 4 | front-right-top |
+| 5 | front-left-top |
+| 6 | back-right-top |
+| 7 | back-left-top |
 
-## Expected math & robustness
-
-* Define `u = normalize(top - bottom)`.
-* Re-orthonormalize the basis to avoid skew:
-
-  ```cpp
-  f = normalize(dir_forward - u * u.dot(dir_forward));   // drop any up component
-  r = normalize(u.cross(f));                              // right-handed basis
-  // (Optionally recompute f = r.cross(u) for orthogonality)
-  ```
-* Half-extents: `h = length(top - bottom) / ratio;  hf = h * f;  hr = h * r`.
-* Corners (top): `t±r±f = top ± hr ± hf`; (bottom): `b±r±f = bottom ± hr ± hf`.
-* Triangulate each face with consistent CCW winding when viewed from outside.
+where front/back is `+/- dir_forward` and right/left is `+/- dir_right`. The 12 triangles are stored in the mesh's element buffer (`m_element_buffer_object`) as index triples: bottom (2), top (2), front (2), right (2), back (2), left (2).
 
 ---
 
 ## Example
 
 ```cpp
+#include <omath/3d_primitives/box.hpp>
+#include <omath/engines/opengl_engine/primitives.hpp>
+
 using omath::Vector3;
-using omath::Triangle;
-using omath::primitives::create_box;
 
 // Axis from bottom to top (height 2)
 Vector3<float> bottom{0, 0, 0};
-Vector3<float> top    {0, 2, 0};
+Vector3<float> top   {0, 2, 0};
 
 // Orientation around the axis
 Vector3<float> forward{0, 0, 1};
 Vector3<float> right  {1, 0, 0};
 
-// Ratio 4 → lateral half-size = height/4 = 0.5
-auto tris = create_box(top, bottom, forward, right, 4.0f);
+// Ratio 4 -> half-extent = height / 4 = 0.5
+auto box = omath::primitives::create_box<omath::opengl_engine::BoxMesh>(top, bottom, forward, right, 4.0f);
 
-// Use the triangles (normals, rendering, collision, etc.)
-for (const auto& tri : tris) {
-  auto n = tri.calculate_normal();
+// The mesh can be traced, transformed or used as a collider source
+for (auto it = box.m_element_buffer_object.cbegin(); it != box.m_element_buffer_object.cend(); ++it) {
+  const auto face = box.make_face_in_local_space(it);   // Triangle<Vector3<float>>
+  auto n = face.calculate_normal();
   (void)n;
 }
 ```
+
+See `tests/general/unit_test_primitive_box.cpp` for use with [`LineTracer`](../collision/line_tracer.md).
 
 ---
 
 ## Usage notes & pitfalls
 
-* **Degenerate axis**: If `top == bottom`, the box is undefined (zero height). Guard against this.
-* **Directions**: Provide **non-zero**, **reasonably orthogonal** `dir_forward`/`dir_right`. A robust implementation should project/normalize internally, but callers should still pass sensible inputs.
-* **Winding**: If your renderer or collision expects a specific winding, verify with a unit test and flip vertex order per face if necessary.
-* **Thickness policy**: This doc assumes both lateral half-extents equal `|top-bottom|/ratio`. If your implementation diverges (e.g., separate forward/right ratios), document it.
+* **Degenerate axis**: If `top == bottom` the height is zero and all corners collapse onto the axis. Guard against this.
+* **Directions**: Pass unit, mutually perpendicular directions (see the note above); the function does not fix them up.
+* **Winding**: The index order is fixed by the implementation; if your renderer or collision code expects a particular winding, verify with a unit test.
+* **Header cost**: `box.hpp` includes the OpenGL engine camera and mesh trait headers.
 
 ---
 
 ## See also
 
-* `omath::Triangle` (vertex utilities: normals, centroid, etc.)
-* `omath::Vector3` (geometry operations used by the construction)
-
----
-
-*Last updated: 31 Oct 2025*
+* [`omath::primitives::Mesh`](mesh.md) (transform, `make_face_in_local_space`, `make_face_in_world_space`)
+* [`omath::Triangle`](../linear_algebra/triangle.md) (vertex utilities: normals, centroid, etc.)
+* [`omath::Vector3`](../linear_algebra/vector3.md) (geometry operations used by the construction)

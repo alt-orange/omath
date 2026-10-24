@@ -16,10 +16,10 @@
 
 **Source Engine** uses:
 * **Up axis**: +Z
-* **Forward axis**: +Y
-* **Right axis**: +X
+* **Forward axis**: +X
+* **Right axis**: -Y
 * **Handedness**: Right-handed
-* **Rotation order**: Pitch (X) → Yaw (Z) → Roll (Y)
+* **Rotation**: `Rz(yaw) · Ry(pitch) · Rx(roll)` (`mat_rotation_zyx`)
 
 ---
 
@@ -33,6 +33,16 @@ public:
     [[nodiscard]]
     static Mat4X4 rotation_matrix(const ViewAngles& rotation);
 };
+
+// mesh.hpp
+using Mesh = primitives::Mesh<Mat4X4, ViewAngles, MeshTrait>;
+// collider.hpp
+using MeshCollider = collision::MeshCollider<Mesh>;
+// primitives.hpp
+using BoxMesh   = primitives::Mesh<Mat4X4, ViewAngles, MeshTrait, primitives::Vertex<>,
+                                   std::array<Vector3<float>, 8>, std::array<Vector3<std::uint32_t>, 12>>;
+using PlaneMesh = primitives::Mesh<Mat4X4, ViewAngles, MeshTrait, primitives::Vertex<>,
+                                   std::array<Vector3<float>, 4>, std::array<Vector3<std::uint32_t>, 2>>;
 
 } // namespace omath::source_engine
 ```
@@ -101,24 +111,21 @@ auto rotated = rot_matrix * mat_column_from_vector(local_point);
 
 The rotation matrix is built following Source Engine's conventions:
 
-1. **Pitch** (rotation around X-axis / right axis)
-   * Positive pitch looks upward (+Z direction)
-   * Range: typically [-89°, 89°]
+1. **Pitch** (rotation around the Y axis, the left/right axis)
+   * **Negative** pitch looks upward (+Z direction)
+   * Range: [-89°, 89°]
 
 2. **Yaw** (rotation around Z-axis / up axis)
    * Positive yaw rotates counterclockwise when viewed from above
    * Range: [-180°, 180°]
 
-3. **Roll** (rotation around Y-axis / forward axis)
-   * Positive roll tilts right
+3. **Roll** (rotation around X-axis / forward axis)
    * Range: [-180°, 180°]
 
-**Composition**: The matrices are combined in the order Pitch × Yaw × Roll, producing a rotation that:
+**Composition**: The matrices are combined as `Rz(yaw) · Ry(pitch) · Rx(roll)`, producing a rotation that:
 * First applies roll around the forward axis
-* Then applies yaw around the up axis
-* Finally applies pitch around the right axis
-
-This matches Source Engine's internal rotation order.
+* Then applies pitch around the Y axis
+* Finally applies yaw around the up axis
 
 ---
 
@@ -128,33 +135,30 @@ The trait delegates to the formula defined in `formulas.hpp`:
 
 ```cpp
 [[nodiscard]]
-Mat4X4 rotation_matrix(const ViewAngles& angles) noexcept;
+constexpr Mat4X4 rotation_matrix(const ViewAngles& angles) noexcept;
 ```
 
 See [Formulas Documentation](formulas.md) for details on the rotation matrix computation.
 
 ---
 
-## Type Alias
+## Type Aliases
 
-The Source Engine mesh type is pre-defined:
+The Source Engine mesh types are pre-defined (see the API block above):
 
-```cpp
-namespace omath::source_engine {
-    using Mesh = primitives::Mesh<Mat4X4, ViewAngles, MeshTrait, float>;
-}
-```
+* `Mesh` (`mesh.hpp`) — `primitives::Mesh<Mat4X4, ViewAngles, MeshTrait>` with the default `primitives::Vertex<>` and `std::vector` buffers.
+* `MeshCollider` (`collider.hpp`) — `collision::MeshCollider<Mesh>`, a collider over a `Mesh` for the GJK/EPA collision code.
+* `BoxMesh` (`primitives.hpp`) — fixed-size mesh with 8 vertices and 12 triangles.
+* `PlaneMesh` (`primitives.hpp`) — fixed-size mesh with 4 vertices and 2 triangles.
 
-Use this alias to ensure correct trait usage:
+Use these aliases to ensure correct trait usage:
 
 ```cpp
 using namespace omath::source_engine;
 
 // Correct: uses Source Engine trait
-Mesh my_mesh(vbo, vao);
-
-// Avoid: manually specifying template parameters
-primitives::Mesh<Mat4X4, ViewAngles, MeshTrait, float> verbose_mesh(vbo, vao);
+Mesh my_mesh(vbo, ebo);
+MeshCollider collider(my_mesh);
 ```
 
 ---
@@ -171,7 +175,7 @@ primitives::Mesh<Mat4X4, ViewAngles, MeshTrait, float> verbose_mesh(vbo, vao);
 ## See Also
 
 - [Mesh Documentation](../../3d_primitives/mesh.md) - Mesh primitive using this trait
-- [MeshCollider Documentation](../../collision/mesh_collider.md) - Collision wrapper for meshes
+- [MeshCollider Documentation](../../collision/mesh_collider.md) - Collision wrapper for meshes (`source_engine::MeshCollider`)
 - [Formulas Documentation](formulas.md) - Source Engine rotation formula
 - [CameraTrait Documentation](camera_trait.md) - Camera transformation trait
 - [Constants Documentation](constants.md) - Source Engine constants

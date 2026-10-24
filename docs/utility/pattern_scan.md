@@ -1,10 +1,10 @@
 # `omath::PatternScanner` — Fast byte-pattern search with wildcards
 
-> Header: your project’s `pattern_scanner.hpp`
+> Header: `omath/utility/pattern_scan.hpp`
 > Namespace: `omath`
 > Core API: `scan_for_pattern(...)` (span or iterators)
 > Errors: `PatternScanError::INVALID_PATTERN_STRING` (from `parse_pattern`)
-> C++: uses `std::span`, `std::expected`, `std::byte`
+> C++: uses `std::span`, `std::expected`, `std::byte`; the compile-time overload needs C++20 class-type NTTPs
 
 `PatternScanner` scans a contiguous byte range for a **hex pattern** that may include **wildcards**. It returns an iterator to the **first match** or the end iterator if not found (or if the pattern string is invalid).
 
@@ -13,7 +13,7 @@
 ## Quick start
 
 ```cpp
-#include "pattern_scanner.hpp"
+#include <omath/utility/pattern_scan.hpp>
 using omath::PatternScanner;
 
 std::vector<std::byte> buf = /* ... bytes ... */;
@@ -34,21 +34,31 @@ auto it = PatternScanner::scan_for_pattern(buf.begin(), buf.end(), "DE AD BE EF"
 if (it != buf.end()) { /* ... */ }
 ```
 
+Or with a pattern checked and parsed at compile time:
+
+```cpp
+auto it = PatternScanner::scan_for_pattern<"48 8B ?? ?? 89">(buf.begin(), buf.end());
+```
+
 ---
 
 ## Pattern string grammar
 
 The pattern string is parsed into a sequence of byte **tokens**:
 
-* **Hex byte**: two hexadecimal digits form one byte.
+* **Hex byte**: hexadecimal digits form one byte.
   Examples: `90`, `4F`, `00`, `ff`
 * **Wildcard byte**: `?` or `??` matches **any single byte**.
-* **Separators**: any ASCII whitespace (space, tab, newline) is **ignored** and may be used to group tokens.
+* **Separators**: the runtime parser splits on the **space** character only. The compile-time overload also accepts tab, newline and carriage return.
 
-> ✔️ Valid: `"48 8B ?? 05 00"`, `"90 90 90"`, `"??"`
-> ❌ Invalid: odd number of hex digits in a token, non-hex characters (besides `?` and whitespace)
+> Valid: `"48 8B ?? 05 00"`, `"90 90 90"`, `"??"`
 
-If the string cannot be parsed into a clean sequence of tokens, `parse_pattern()` returns `std::unexpected(PatternScanError::INVALID_PATTERN_STRING)`, and the public scan function returns **end**.
+Runtime string (`std::string_view`) behavior:
+
+* A token that is not a valid hex number (1 or 2 characters) makes `parse_pattern()` return `std::unexpected(PatternScanError::INVALID_PATTERN_STRING)`, and the public scan function returns **end**.
+* Empty tokens (repeated spaces) and tokens of 3 or more characters are **silently skipped**, not rejected. A single hex digit is accepted as one byte (`"9"` is `0x09`).
+
+Compile-time overload (`scan_for_pattern<"...">`): every token must be exactly two hex digits, `?` or `??`; anything else is a compile-time error.
 
 ---
 
@@ -79,6 +89,20 @@ public:
   scan_for_pattern(const IteratorType& begin,
                    const IteratorType& end,
                    const std::string_view& pattern);
+
+  // Compile-time pattern overload: the pattern is parsed (and validated) at compile time
+  template<ConstevalPattern Pattern, class IteratorType>
+  requires std::input_or_output_iterator<std::remove_cvref_t<IteratorType>>
+  static IteratorType
+  scan_for_pattern(const IteratorType& begin, const IteratorType& end);
+
+  // Wrapper that lets a string literal be a template argument
+  template<std::size_t Length>
+  struct ConstevalPattern {
+    char value[Length]{};
+    constexpr ConstevalPattern(const char (&text)[Length]);
+    constexpr operator std::string_view() const noexcept;
+  };
 private:
   [[nodiscard]]
   static std::expected<std::vector<std::optional<std::byte>>, PatternScanError>
@@ -135,18 +159,26 @@ auto it = PatternScanner::scan_for_pattern(sub_begin, sub_end, "DE AD ?? BE EF")
 
 ## Behavior & edge cases
 
-* **Empty or too-short**: If the effective pattern token count `M` is `0` or `M > N`, the function returns `end`.
+* **Too-short range**: If the parsed pattern has more tokens than the range has bytes (`M > N`), the function returns `end`.
+* **Empty / all-wildcard pattern**: A pattern with no hex byte (empty, or only wildcards) matches immediately at `begin` when the range is at least `M` bytes long.
 * **Wildcards**: Each `?`/`??` token matches **exactly one** byte.
-* **No exceptions**: Invalid pattern → parsed as `unexpected`, public API returns `end`.
+* **No exceptions**: Invalid pattern → parsed as `unexpected`, public API returns `end` (the compile-time overload rejects bad patterns at compile time instead).
 * **No ownership**: The span overload takes `const std::span<std::byte>&` and returns a **mutable iterator** into that span. You must ensure the underlying memory stays alive. The rvalue-span overload is **deleted** to prevent dangling.
 
 ---
 
 ## Notes & caveats (implementation-sensitive)
 
-* Although the iterator overload is constrained with `std::input_or_output_iterator`, the implementation uses `*(begin + i + j)` and arithmetic on iterators. In practice this means you should pass **random-access / contiguous iterators** (e.g., from `std::vector<std::byte>` or `std::span<std::byte>`). Using non-random-access iterators would be ill-formed.
-* The inner matching loop compares a parsed token (`std::optional<std::byte>`) to the candidate byte; `std::nullopt` is treated as a **wildcard** (always matches).
-* **Implementation note:** the outer scan currently derives its scan bound from the **pattern string length**; conceptually it should use the **number of parsed tokens** (hex/wildcard bytes). If you plan to accept spaces (or other non-byte characters) in the pattern string, ensure the scan window uses the parsed token count to avoid false negatives near the end of the buffer.
+* Although the iterator overloads are constrained with `std::input_or_output_iterator`, the implementation uses `*(begin + i + j)` and arithmetic on iterators. In practice this means you should pass **random-access / contiguous iterators** (e.g., from `std::vector<std::byte>` or `std::span<std::byte>`). Using non-random-access iterators would be ill-formed.
+* Contiguous iterators over `std::byte` take a vectorized path (AVX2 when built with `OMATH_USE_AVX2`, otherwise SSE2 where available); other iterator types use the plain sliding window.
+* The matching compares a parsed token (`std::optional<std::byte>`) to the candidate byte; `std::nullopt` is treated as a **wildcard** (always matches).
+* The scan bound is derived from the number of **parsed tokens**, not from the length of the pattern string.
+
+---
+
+## See also
+
+* [`PePatternScanner`](pe_pattern_scan.md) — applies the same patterns to PE sections
 
 ---
 
@@ -160,6 +192,8 @@ unit_test_pattern_scan_corner_case_1_Test
 unit_test_pattern_scan_corner_case_2_Test
 unit_test_pattern_scan_corner_case_3_Test
 unit_test_pattern_scan_corner_case_4_Test
+unit_test_pattern_scan_consteval_read_test_Test
+unit_test_pattern_scan_consteval_spacing_and_case_Test
 ```
 
 Use these to validate parsing correctness, wildcard handling, and boundary conditions.
@@ -168,7 +202,7 @@ Use these to validate parsing correctness, wildcard handling, and boundary condi
 
 ## Troubleshooting
 
-* **Always returns end**: verify the pattern string is valid hex/wildcards and that you’re scanning the intended subrange. Try a simpler pattern (e.g., a single known byte) to sanity-check.
+* **Always returns end**: verify the pattern string is valid hex/wildcards (remember that only the space character separates tokens at runtime) and that you’re scanning the intended subrange. Try a simpler pattern (e.g., a single known byte) to sanity-check.
 * **Crashes or compile errors with iterator overload**: use iterators that support random access (e.g., from `std::vector`), or prefer the `std::span` overload.
 * **Ambiguous wildcards**: this scanner treats `?` and `??` as **byte-wide** wildcards (not per-nibble). If you need nibble-level masks, extend `parse_pattern` to support patterns like `A?`/`?F` with bitmask matching.
 

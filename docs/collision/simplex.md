@@ -41,7 +41,7 @@ concept GjkVector = requires(const V& a, const V& b) {
 };
 ```
 
-`omath::Vector3<float>` satisfies this concept and is the default.
+`omath::Vector3<float>` satisfies this concept and is the default (`template<GjkVector VectorType = Vector3<float>>`).
 
 ---
 
@@ -52,6 +52,8 @@ constexpr Simplex() = default;
 
 constexpr Simplex& operator=(std::initializer_list<VectorType> list) noexcept;
 ```
+
+`static constexpr std::size_t capacity = 4;`
 
 ### Initialization
 
@@ -88,7 +90,9 @@ simplex.push_front(new_support_point);
 
 ```cpp
 [[nodiscard]] constexpr std::size_t size() const noexcept;
-[[nodiscard]] static constexpr std::size_t capacity = 4;
+[[nodiscard]] constexpr bool        empty() const noexcept;
+static constexpr std::size_t capacity = 4;
+constexpr void clear() noexcept;   // size becomes 0
 ```
 
 * `size()` — current number of points (0-4)
@@ -104,6 +108,12 @@ simplex.push_front(new_support_point);
 Access points by index. **No bounds checking** — index must be `< size()`.
 
 ```cpp
+[[nodiscard]] constexpr const VectorType& front() const noexcept;  // newest point (index 0)
+[[nodiscard]] constexpr const VectorType& back()  const noexcept;  // oldest point (index size()-1)
+[[nodiscard]] constexpr const VectorType* data()  const noexcept;
+```
+
+```cpp
 if (simplex.size() >= 2) {
     auto edge = simplex[1] - simplex[0];
 }
@@ -112,13 +122,11 @@ if (simplex.size() >= 2) {
 ### Iterators
 
 ```cpp
-[[nodiscard]] constexpr auto begin() noexcept;
-[[nodiscard]] constexpr auto end() noexcept;
 [[nodiscard]] constexpr auto begin() const noexcept;
 [[nodiscard]] constexpr auto end() const noexcept;
 ```
 
-Standard iterator support for range-based loops:
+Only const iteration is provided; `end()` is `begin() + size()`. Range-based loops cover just the live points:
 
 ```cpp
 for (const auto& vertex : simplex) {
@@ -130,37 +138,19 @@ for (const auto& vertex : simplex) {
 
 ## GJK-Specific Methods
 
-These methods implement the core logic for simplifying simplices in the GJK algorithm.
-
-### `contains_origin`
+### `handle`
 
 ```cpp
-[[nodiscard]] constexpr bool contains_origin() noexcept;
+[[nodiscard]] constexpr bool handle(VectorType& direction) noexcept;
 ```
 
-Determines if the origin lies within the current simplex. This is the **core GJK test**: if true, the shapes intersect.
+One GJK step. It dispatches on the current size (point, line, triangle, tetrahedron), reduces the simplex to the feature closest to the origin, and writes the **next search direction** into `direction`.
 
-* For a **1-point** simplex, always returns `false` (can't contain origin)
-* For a **2-point** simplex (line), checks if origin projects onto the segment
-* For a **3-point** simplex (triangle), checks if origin projects onto the triangle
-* For a **4-point** simplex (tetrahedron), checks if origin is inside
+**Return value**:
+* `true` — the simplex is a tetrahedron that contains the origin (collision detected)
+* `false` — the origin is not contained yet; `direction` has been updated and the simplex may have shrunk (its `size()` can decrease)
 
-**Side effect**: Simplifies the simplex by removing points not needed to maintain proximity to the origin. After calling, `size()` may have decreased.
-
-**Return value**: 
-* `true` — origin is contained (collision detected)
-* `false` — origin not contained; simplex has been simplified toward origin
-
-### `next_direction`
-
-```cpp
-[[nodiscard]] constexpr VectorType next_direction() const noexcept;
-```
-
-Computes the next search direction for GJK. This is the direction from the simplex toward the origin, used to query the next support point.
-
-* Must be called **after** `contains_origin()` returns `false`
-* Behavior is **undefined** if called when `size() == 0` or when origin is already contained
+With size 0 it returns `false` and leaves `direction` untouched. The remaining logic (`handle_point`, `handle_line`, `handle_triangle`, `handle_tetrahedron`) is private.
 
 ---
 
@@ -168,33 +158,32 @@ Computes the next search direction for GJK. This is the direction from the simpl
 
 ### GJK Iteration (Simplified)
 
+This mirrors what `GjkAlgorithm::is_collide_with_simplex_info` does:
+
 ```cpp
 Simplex<Vector3<float>> simplex;
-Vector3<float> direction{1, 0, 0};  // Initial search direction
+
+auto support = find_support_vertex(collider_a, collider_b, initial_direction);
+simplex.push_front(support);
+auto direction = -support;
 
 for (int i = 0; i < 64; ++i) {
     // Get support point in current direction
-    auto support = find_support_vertex(collider_a, collider_b, direction);
-    
+    support = find_support_vertex(collider_a, collider_b, direction);
+
     // Check if we made progress
-    if (support.dot(direction) <= 0)
+    if (support.dot(direction) <= epsilon)
         break;  // No collision possible
-    
+
     simplex.push_front(support);
-    
-    // Check if simplex contains origin
-    if (simplex.contains_origin()) {
-        // Collision detected!
-        assert(simplex.size() == 4);
-        return GjkHitInfo{true, simplex};
-    }
-    
-    // Get next search direction
-    direction = simplex.next_direction();
+
+    // Reduce the simplex and compute the next direction; true when the origin is enclosed
+    if (simplex.handle(direction))
+        return GjkHitInfo{true, simplex};   // simplex.size() == 4
 }
 
 // No collision
-return GjkHitInfo{false, {}};
+return GjkHitInfo{false, simplex};
 ```
 
 ### Manual Simplex Construction
@@ -213,7 +202,8 @@ simplex = {
 assert(simplex.size() == 4);
 
 // Check if origin is inside this tetrahedron
-bool has_collision = simplex.contains_origin();
+Vector3<float> direction;
+bool has_collision = simplex.handle(direction);
 ```
 
 ### Iterating Over Points
@@ -235,33 +225,31 @@ void print_simplex(const Simplex<Vector3<float>>& s) {
 
 ### Simplex Simplification
 
-The `contains_origin()` method implements different tests based on simplex size:
+`handle()` implements a different test per simplex size:
+
+#### Point (1 point)
+
+Sets the direction toward the origin (`-A`) and returns `false`.
 
 #### Line Segment (2 points)
 
-Checks if origin projects onto segment `[A, B]`:
-* If yes, keeps both points
-* If no, keeps only the closer point
+If the origin lies on the segment's side (`AB` points toward the origin), keeps both points and picks a direction perpendicular to the line toward the origin; if the cross product is degenerate (origin collinear with the segment) it falls back to an arbitrary perpendicular. Otherwise it reduces to the newest point `A`.
 
 #### Triangle (3 points)
 
-Tests the origin against the triangle plane and edges using cross products. Simplifies to:
-* The full triangle if origin projects onto its surface
-* An edge if origin is closest to that edge
-* A single vertex otherwise
+Tests the origin against the triangle's edge regions using cross products. Simplifies to:
+* An edge (`AC` or `AB`) if the origin lies in that edge's region
+* The full triangle if the origin is above or below it (direction along or against the face normal, flipping the winding when needed)
 
 #### Tetrahedron (4 points)
 
-Tests origin against all four faces:
-* If origin is inside, returns `true` (collision)
-* If outside, reduces to the face/edge/vertex closest to origin
+Tests the origin against the three faces that contain the newest point `A`:
+* If the origin is outside one of them, reduces to that triangle and runs the triangle case
+* If it is inside all three, returns `true` (collision)
 
 ### Direction Calculation
 
-The `next_direction()` method computes:
-* For **line**: perpendicular from line toward origin
-* For **triangle**: perpendicular from triangle toward origin
-* Implementation uses cross products and projections to avoid sqrt when possible
+The new search direction is computed by `handle()` as an output parameter (`direction`), using cross products and `point_to_same_direction`; no square roots are needed.
 
 ---
 
@@ -269,8 +257,7 @@ The `next_direction()` method computes:
 
 * **Storage**: Fixed 4 × `sizeof(VectorType)` + size counter
 * **Push front**: O(n) where n is current size (max 4, so effectively O(1))
-* **Contains origin**: O(1) for each case (line, triangle, tetrahedron)
-* **Next direction**: O(1) — simple cross products and subtractions
+* **`handle()`**: O(1) for each case (point, line, triangle, tetrahedron); the direction update uses only cross products and subtractions
 * **No heap allocations**: All storage is inline
 
 **constexpr**: All methods are `constexpr`, enabling compile-time usage where feasible.
@@ -281,8 +268,7 @@ The `next_direction()` method computes:
 
 ### Degenerate Simplices
 
-* **Zero-length edges**: Can occur if support points coincide. The algorithm handles this by checking `point_to_same_direction` before divisions.
-* **Collinear points**: Triangle simplification detects and handles collinear cases by reducing to a line.
+* **Zero-length edges**: Can occur if support points coincide. No division is performed; the line case falls back to an arbitrary perpendicular direction when the cross product is (near) zero.
 * **Flat tetrahedron**: If the 4th point is coplanar with the first 3, the origin containment test may have reduced precision.
 
 ### Assertions
@@ -303,7 +289,7 @@ The `next_direction()` method computes:
 
 * Starts empty or with an initial point
 * Grows via `push_front` as support points are added
-* Shrinks via `contains_origin` as it's simplified
+* Shrinks via `handle()` as it's simplified
 * Once it reaches 4 points and contains origin, GJK succeeds
 
 ### In EPA

@@ -2,7 +2,7 @@
 
 > Header: `omath/3d_primitives/mesh.hpp`
 > Namespace: `omath::primitives`
-> Depends on: `omath::Vector3<T>`, `omath::Mat4X4`, `omath::Triangle<Vector3<T>>`
+> Depends on: `omath::Vector3<T>`, `omath::Mat<4,4,...>` (`Mat4X4` alias per engine), `omath::Triangle<Vector3<T>>`, `omath::primitives::Aabb`
 > Purpose: represent and transform 3D meshes in different engine coordinate systems
 
 ---
@@ -10,8 +10,8 @@
 ## Overview
 
 `Mesh` represents a 3D polygonal mesh with vertex data and transformation capabilities. It stores:
-* **Vertex buffer (VBO)** — array of 3D vertex positions
-* **Index buffer (VAO)** — array of triangular faces (indices into VBO)
+* **Vertex buffer (VBO)** — container of vertices (`Vertex<>` with position/normal/uv, or plain `Vector3` positions)
+* **Element buffer (EBO)** — container of triangular faces (`Vector3<std::uint32_t>` indices into the VBO)
 * **Transformation** — position, rotation, and scale with caching
 
 The mesh supports transformation from local space to world space using engine-specific coordinate systems through the `MeshTrait` template parameter.
@@ -21,44 +21,63 @@ The mesh supports transformation from local space to world space using engine-sp
 ## Template Declaration
 
 ```cpp
-template<class Mat4X4, class RotationAngles, class MeshTypeTrait, class Type = float>
+template<class Mat4X4, class RotationAngles, class MeshTypeTrait,
+         class VertType = Vertex<>,
+         class VboType  = std::vector<VertType>,
+         class EboType  = std::vector<Vector3<std::uint32_t>>>
 class Mesh final;
 ```
 
 ### Template Parameters
 
-* `Mat4X4` — Matrix type for transformations (typically `omath::Mat4X4`)
-* `RotationAngles` — Rotation representation (e.g., `ViewAngles` with pitch/yaw/roll)
+* `Mat4X4` — Matrix type for transformations (the engine's `Mat4X4` alias)
+* `RotationAngles` — Rotation representation (e.g., the engine's `ViewAngles` with pitch/yaw/roll)
 * `MeshTypeTrait` — Engine-specific transformation trait (see [Engine Traits](#engine-traits))
-* `Type` — Scalar type for vertex coordinates (default `float`)
+* `VertType` — Vertex type used to derive `VectorType` (default `Vertex<>`)
+* `VboType` — Vertex buffer container (default `std::vector<VertType>`); `std::array` is used by the box/plane builders
+* `EboType` — Element buffer container (default `std::vector<Vector3<std::uint32_t>>`)
+
+### `Vertex`
+
+```cpp
+template<class VecType = Vector3<float>, class UvT = Vector2<float>>
+struct Vertex final {
+    using VectorType = VecType;
+    using UvType     = UvT;
+    VectorType position;
+    VectorType normal;
+    UvType     uv;
+};
+
+template<typename T> concept HasPosition = requires(T vertex) { vertex.position; };
+template<typename T> concept HasNormal   = requires(T vertex) { vertex.normal; };
+template<typename T> concept HasUv       = requires(T vertex) { vertex.uv; };
+```
+
+The mesh treats a vertex that has a `position` member as a full vertex and any other element type as a bare position vector.
 
 ---
 
 ## Type Aliases
 
 ```cpp
-using NumericType = Type;
+using VectorType = VertType::VectorType;
+using VertexType = VboType::value_type;
 ```
 
-Common engine-specific aliases:
+Pre-defined mesh aliases live in each engine namespace (`omath/engines/<engine>/mesh.hpp`):
 
 ```cpp
-// Source Engine
-using Mesh = omath::primitives::Mesh<Mat4X4, ViewAngles, MeshTrait, float>;
-
-// Unity Engine  
-using Mesh = omath::primitives::Mesh<Mat4X4, ViewAngles, MeshTrait, float>;
-
-// Unreal Engine
-using Mesh = omath::primitives::Mesh<Mat4X4, ViewAngles, MeshTrait, float>;
-
-// Frostbite, IW Engine, OpenGL similar...
+// e.g. Source, Frostbite, IW, OpenGL, Serious, CryEngine, RAGE
+using Mesh = omath::primitives::Mesh<Mat4X4, ViewAngles, MeshTrait>;
 ```
+
+Box and plane meshes use dedicated aliases (`BoxMesh`, `PlaneMesh`) from `omath/engines/<engine>/primitives.hpp`, which switch the buffers to `std::array`.
 
 Use the pre-defined type aliases in engine namespaces:
 ```cpp
 using namespace omath::source_engine;
-Mesh my_mesh = /* ... */;  // Uses SourceEngine::Mesh
+Mesh my_mesh = /* ... */;  // Uses source_engine::Mesh
 ```
 
 ---
@@ -68,12 +87,12 @@ Mesh my_mesh = /* ... */;  // Uses SourceEngine::Mesh
 ### Vertex Data
 
 ```cpp
-std::vector<Vector3<NumericType>> m_vertex_buffer;        // VBO: vertex positions
-std::vector<Vector3<std::size_t>> m_vertex_array_object;  // VAO: face indices
+Vbo m_vertex_buffer;           // VBO: vertices (positions in local space)
+Ebo m_element_buffer_object;   // EBO: face indices
 ```
 
-* `m_vertex_buffer` — array of vertex positions in **local space**
-* `m_vertex_array_object` — array of triangular faces, each containing 3 indices into `m_vertex_buffer`
+* `m_vertex_buffer` — vertices in **local space**
+* `m_element_buffer_object` — triangular faces, each containing 3 indices into `m_vertex_buffer`
 
 **Public access**: These members are public for direct manipulation when needed.
 
@@ -82,25 +101,25 @@ std::vector<Vector3<std::size_t>> m_vertex_array_object;  // VAO: face indices
 ## Constructor
 
 ```cpp
-Mesh(std::vector<Vector3<NumericType>> vbo,
-     std::vector<Vector3<std::size_t>> vao,
-     Vector3<NumericType> scale = {1, 1, 1});
+Mesh(Vbo vbo, Ebo vao, const VectorType scale = {1, 1, 1});
 ```
 
 Creates a mesh from vertex and index data.
 
 **Parameters**:
 * `vbo` — vertex buffer (moved into mesh)
-* `vao` — index buffer / vertex array object (moved into mesh)
+* `vao` — element buffer (moved into mesh)
 * `scale` — initial scale (default `{1, 1, 1}`)
 
 **Example**:
 ```cpp
-std::vector<Vector3<float>> vertices = {
-    {0, 0, 0}, {1, 0, 0}, {0, 1, 0}, {0, 0, 1}
+using omath::primitives::Vertex;
+
+std::vector<Vertex<>> vertices = {
+    {{0, 0, 0}, {}, {}}, {{1, 0, 0}, {}, {}}, {{0, 1, 0}, {}, {}}, {{0, 0, 1}, {}, {}}
 };
 
-std::vector<Vector3<std::size_t>> faces = {
+std::vector<Vector3<std::uint32_t>> faces = {
     {0, 1, 2},  // Triangle 1
     {0, 1, 3},  // Triangle 2
     {0, 2, 3},  // Triangle 3
@@ -118,8 +137,8 @@ Mesh tetrahedron(std::move(vertices), std::move(faces));
 ### Setting Transform Components
 
 ```cpp
-void set_origin(const Vector3<NumericType>& new_origin);
-void set_scale(const Vector3<NumericType>& new_scale);
+void set_origin(const VectorType& new_origin);
+void set_scale(const VectorType& new_scale);
 void set_rotation(const RotationAngles& new_rotation_angles);
 ```
 
@@ -139,8 +158,8 @@ mesh.set_rotation(angles);
 ### Getting Transform Components
 
 ```cpp
-[[nodiscard]] const Vector3<NumericType>& get_origin() const;
-[[nodiscard]] const Vector3<NumericType>& get_scale() const;
+[[nodiscard]] const VectorType& get_origin() const;
+[[nodiscard]] const VectorType& get_scale() const;
 [[nodiscard]] const RotationAngles& get_rotation_angles() const;
 ```
 
@@ -155,7 +174,7 @@ Retrieve current transformation components.
 Returns the cached local-to-world transformation matrix. The matrix is computed lazily on first access after any transformation change:
 
 ```
-M = Translation(origin) × Scale(scale) × Rotation(angles)
+M = Translation(origin) × Rotation(angles) × Scale(scale)
 ```
 
 The rotation matrix is computed using the engine-specific `MeshTrait::rotation_matrix()` method.
@@ -166,14 +185,14 @@ The rotation matrix is computed using the engine-specific `MeshTrait::rotation_m
 
 ## Vertex Transformation
 
-### `vertex_to_world_space`
+### `vertex_position_to_world_space`
 
 ```cpp
 [[nodiscard]]
-Vector3<float> vertex_to_world_space(const Vector3<float>& vertex) const;
+VectorType vertex_position_to_world_space(const Vector3<float>& vertex_position) const;
 ```
 
-Transforms a vertex from local space to world space by multiplying with the transformation matrix.
+Transforms a vertex position from local space to world space by multiplying with the transformation matrix.
 
 **Algorithm**:
 1. Convert vertex to column matrix: `[x, y, z, 1]ᵀ`
@@ -183,40 +202,50 @@ Transforms a vertex from local space to world space by multiplying with the tran
 **Usage**:
 ```cpp
 Vector3<float> local_vertex{1, 0, 0};
-Vector3<float> world_vertex = mesh.vertex_to_world_space(local_vertex);
+auto world_vertex = mesh.vertex_position_to_world_space(local_vertex);
 ```
 
-**Note**: This is used internally by `MeshCollider` to provide world-space support functions for GJK/EPA.
+**Note**: This is used by `MeshCollider` to provide world-space support points for GJK/EPA.
 
 ---
 
 ## Face Transformation
 
-### `make_face_in_world_space`
+### `make_face_in_local_space` / `make_face_in_world_space`
 
 ```cpp
 [[nodiscard]]
-Triangle<Vector3<float>> make_face_in_world_space(
-    const std::vector<Vector3<std::size_t>>::const_iterator vao_iterator
-) const;
+Triangle<VectorType> make_face_in_local_space(const Ebo::const_iterator vao_iterator) const;
+
+[[nodiscard]]
+Triangle<VectorType> make_face_in_world_space(const Ebo::const_iterator vao_iterator) const;
 ```
 
-Creates a triangle in world space from a face index iterator.
+Create a triangle from a face index iterator: the local-space variant uses the raw vertex positions, the world-space variant transforms all three through `vertex_position_to_world_space`. Indices are resolved with `m_vertex_buffer.at(...)`.
 
 **Parameters**:
-* `vao_iterator` — iterator to an element in `m_vertex_array_object`
-
-**Returns**: `Triangle` with all three vertices transformed to world space.
+* `vao_iterator` — iterator to an element in `m_element_buffer_object`
 
 **Example**:
 ```cpp
-for (auto it = mesh.m_vertex_array_object.begin(); 
-     it != mesh.m_vertex_array_object.end(); 
+for (auto it = mesh.m_element_buffer_object.cbegin();
+     it != mesh.m_element_buffer_object.cend();
      ++it) {
     Triangle<Vector3<float>> world_triangle = mesh.make_face_in_world_space(it);
     // Render or process the triangle
 }
 ```
+
+---
+
+## Bounds
+
+```cpp
+[[nodiscard]]
+Aabb<typename VectorType::ContainedType> local_bounds() const;
+```
+
+Axis-aligned bounds of the vertex buffer in the mesh's **own frame** (no transform applied). It is a plain min/max sweep over the vertices each time it is called, so hoist it out of query loops (for example as a broadphase reject in front of a face-by-face ray trace).
 
 ---
 
@@ -227,16 +256,17 @@ for (auto it = mesh.m_vertex_array_object.begin();
 ```cpp
 using namespace omath::source_engine;
 
-std::vector<Vector3<float>> box_vbo = {
+using omath::primitives::Vertex;
+std::vector<Vertex<>> box_vbo = {
     // Bottom face
-    {-0.5f, -0.5f, 0.0f}, { 0.5f, -0.5f, 0.0f},
-    { 0.5f,  0.5f, 0.0f}, {-0.5f,  0.5f, 0.0f},
-    // Top face  
-    {-0.5f, -0.5f, 1.0f}, { 0.5f, -0.5f, 1.0f},
-    { 0.5f,  0.5f, 1.0f}, {-0.5f,  0.5f, 1.0f}
+    {{-0.5f, -0.5f, 0.0f}, {}, {}}, {{ 0.5f, -0.5f, 0.0f}, {}, {}},
+    {{ 0.5f,  0.5f, 0.0f}, {}, {}}, {{-0.5f,  0.5f, 0.0f}, {}, {}},
+    // Top face
+    {{-0.5f, -0.5f, 1.0f}, {}, {}}, {{ 0.5f, -0.5f, 1.0f}, {}, {}},
+    {{ 0.5f,  0.5f, 1.0f}, {}, {}}, {{-0.5f,  0.5f, 1.0f}, {}, {}}
 };
 
-std::vector<Vector3<std::size_t>> box_vao = {
+std::vector<Vector3<std::uint32_t>> box_vao = {
     // Bottom
     {0, 1, 2}, {0, 2, 3},
     // Top
@@ -283,10 +313,10 @@ mesh_a.set_origin({0, 0, 0});
 Mesh mesh_b(vbo_b, vao_b);
 mesh_b.set_origin({5, 0, 0});
 
-MeshCollider collider_a(std::move(mesh_a));
+MeshCollider collider_a(std::move(mesh_a));   // omath::source_engine::MeshCollider
 MeshCollider collider_b(std::move(mesh_b));
 
-auto result = GjkAlgorithm<MeshCollider<Mesh>>::check_collision(
+const bool hit = GjkAlgorithm<MeshCollider>::is_collide(
     collider_a, collider_b
 );
 ```
@@ -295,8 +325,8 @@ auto result = GjkAlgorithm<MeshCollider<Mesh>>::check_collision(
 
 ```cpp
 void render_mesh(const Mesh& mesh) {
-    for (auto it = mesh.m_vertex_array_object.begin();
-         it != mesh.m_vertex_array_object.end();
+    for (auto it = mesh.m_element_buffer_object.cbegin();
+         it != mesh.m_element_buffer_object.cend();
          ++it) {
         
         Triangle<Vector3<float>> tri = mesh.make_face_in_world_space(it);
@@ -326,6 +356,9 @@ public:
 | Engine | Namespace | Header |
 |--------|-----------|--------|
 | Source Engine | `omath::source_engine` | `engines/source_engine/mesh.hpp` |
+| CryEngine | `omath::cry_engine` | `engines/cry_engine/mesh.hpp` |
+| RAGE | `omath::rage_engine` | `engines/rage_engine/mesh.hpp` |
+| Serious Engine | `omath::serious_engine` | `engines/serious_engine/mesh.hpp` |
 | Unity | `omath::unity_engine` | `engines/unity_engine/mesh.hpp` |
 | Unreal | `omath::unreal_engine` | `engines/unreal_engine/mesh.hpp` |
 | Frostbite | `omath::frostbite_engine` | `engines/frostbite_engine/mesh.hpp` |
@@ -378,7 +411,7 @@ auto m3 = mesh.get_to_world_matrix();  // Compute again
 
 ### Transformation Cost
 
-* `vertex_to_world_space`: ~15-20 FLOPs per vertex (4×4 matrix multiply)
+* `vertex_position_to_world_space`: ~15-20 FLOPs per vertex (4×4 matrix multiply)
 * `make_face_in_world_space`: ~60 FLOPs (3 vertices)
 
 For high-frequency transformations, consider:
@@ -418,7 +451,7 @@ For collision detection, ensure `m_vertex_buffer` is non-empty.
 
 ### Index Validity
 
-No bounds checking is performed on indices in `m_vertex_array_object`. Ensure all indices are valid:
+Face indices are resolved with `m_vertex_buffer.at(...)` (throws `std::out_of_range` on a bad index). Ensure all indices are valid:
 ```cpp
 assert(face.x < mesh.m_vertex_buffer.size());
 assert(face.y < mesh.m_vertex_buffer.size());
@@ -456,6 +489,9 @@ For engine-specific `MeshTrait` details, see:
 - [Source Engine MeshTrait](../engines/source_engine/mesh_trait.md)
 - [Unity Engine MeshTrait](../engines/unity_engine/mesh_trait.md)
 - [Unreal Engine MeshTrait](../engines/unreal_engine/mesh_trait.md)
+- [CryEngine MeshTrait](../engines/cry_engine/mesh_trait.md)
+- [RAGE Engine MeshTrait](../engines/rage_engine/mesh_trait.md)
+- [Serious Engine MeshTrait](../engines/serious_engine/mesh_trait.md)
 - [Frostbite Engine MeshTrait](../engines/frostbite/mesh_trait.md)
 - [IW Engine MeshTrait](../engines/iw_engine/mesh_trait.md)
 - [OpenGL Engine MeshTrait](../engines/opengl_engine/mesh_trait.md)

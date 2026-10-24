@@ -16,7 +16,7 @@
 
 **OpenGL** (canonical) uses:
 * **Up axis**: +Y
-* **Forward axis**: +Z (toward viewer)
+* **Forward axis**: -Z (`k_abs_forward = {0, 0, -1}`)
 * **Right axis**: +X
 * **Handedness**: Right-handed
 * **Rotation order**: Roll (Z) → Pitch (X) → Yaw (Y), i.e. `R = Ry(yaw) · Rx(pitch) · Rz(roll)`; roll turns around the object's own forward axis
@@ -96,7 +96,7 @@ OpenGL uses a right-handed Y-up coordinate system:
    * Positive roll tilts right
    * Range: [-180°, 180°]
 
-**Note**: In OpenGL, +Z points toward the viewer in view space, but away from the viewer in world space.
+**Note**: The engine's forward axis is -Z, so a mesh with zero rotation faces down -Z.
 
 ---
 
@@ -104,9 +104,18 @@ OpenGL uses a right-handed Y-up coordinate system:
 
 ```cpp
 namespace omath::opengl_engine {
-    using Mesh = primitives::Mesh<Mat4X4, ViewAngles, MeshTrait, float>;
+    // mesh.hpp
+    using Mesh = primitives::Mesh<Mat4X4, ViewAngles, MeshTrait>;
+
+    // primitives.hpp
+    using BoxMesh   = primitives::Mesh<Mat4X4, ViewAngles, MeshTrait, primitives::Vertex<>,
+                                       std::array<Vector3<float>, 8>, std::array<Vector3<std::uint32_t>, 12>>;
+    using PlaneMesh = primitives::Mesh<Mat4X4, ViewAngles, MeshTrait, primitives::Vertex<>,
+                                       std::array<Vector3<float>, 4>, std::array<Vector3<std::uint32_t>, 2>>;
 }
 ```
+
+`BoxMesh` (8 vertices, 12 triangles) and `PlaneMesh` (4 vertices, 2 triangles) are fixed-size meshes declared in `primitives.hpp`. OpenGL has no `collider.hpp`, so there is no ready-made `MeshCollider` alias; wrap a mesh with `collision::MeshCollider<Mesh>` yourself if needed.
 
 ---
 

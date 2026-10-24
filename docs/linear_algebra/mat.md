@@ -1,6 +1,6 @@
 # `omath::Mat` — Matrix class (C++20/23)
 
-> Header: your project’s `mat.hpp` (requires `vector3.hpp`)
+> Header: `omath/linear_algebra/mat.hpp` (includes `omath/linear_algebra/vector3.hpp`)
 > Namespace: `omath`
 > Requires: **C++23** (uses multi-parameter `operator[]`)
 > SIMD (optional): define **`OMATH_USE_AVX2`** to enable AVX2-accelerated multiplication for `float`/`double`.
@@ -14,7 +14,7 @@
 * **Row/column counts** as template parameters (no heap allocations).
 * **Row-major** or **column-major** storage (compile-time via `MatStoreType`).
 * **Arithmetic** and **linear algebra**: matrix × matrix, scalar ops, transpose, determinant, inverse (optional), etc.
-* **Transform helpers**: translation, axis rotations, look-at, perspective & orthographic projections.
+* **Transform helpers**: translation, scale, axis/Euler rotations (and their extraction), look-at, perspective & orthographic projections.
 * **I/O helpers**: `to_string`/`to_wstring`/`to_u8string` and `std::formatter` specializations.
 
 ---
@@ -30,14 +30,24 @@
 
 ```cpp
 enum class MatStoreType : uint8_t { ROW_MAJOR = 0, COLUMN_MAJOR };
+
+struct MatSize { size_t rows, columns; };
+
+// Depth range of the NDC space used by the projection helpers
+enum class NDCDepthRange : uint8_t {
+    NEGATIVE_ONE_TO_ONE = 0, // OpenGL: [-1.0, 1.0]
+    ZERO_TO_ONE              // DirectX / Vulkan: [0.0, 1.0]
+};
 ```
+
+`Mat` also exposes `rows`, `columns`, `store_type` (static constexpr), `value_type` and `ContainedType`.
 
 ---
 
 ## Quick start
 
 ```cpp
-#include "mat.hpp"
+#include <omath/linear_algebra/mat.hpp>
 using omath::Mat;
 
 // 4x4 float, row-major
@@ -93,7 +103,7 @@ Mat(const Mat&); Mat(Mat&&);
   Mat<>::row_count();             // constexpr size_t
   Mat<>::columns_count();         // constexpr size_t
   Mat<>::size();                  // constexpr MatSize {rows, columns}
-  Mat<>::get_store_ordering();    // constexpr MatStoreType
+  Mat<>::get_store_ordering();    // consteval MatStoreType
   using ContainedType = Type;     // alias
   ```
 
@@ -110,7 +120,7 @@ T const& operator[](size_t r, size_t c) const; // C++23
 ```
 
 > **Bounds checking**
-> In debug builds you may enable/disable range checks via your compile-time macros (see the source guard around `at()`).
+> `at()` (and therefore `operator[]`) throws `std::out_of_range` when `NDEBUG` is undefined and `OMATH_SUPRESS_SAFETY_CHECKS` is not defined. In release builds there is no check.
 
 ---
 
@@ -133,6 +143,7 @@ T const& operator[](size_t r, size_t c) const; // C++23
   ```cpp
   Mat  operator*(const Type& s) const;  Mat& operator*=(const Type& s);
   Mat  operator/(const Type& s) const;  Mat& operator/=(const Type& s);
+  Mat& operator*=(const Mat& other);    // square matrices only (static_assert)
   ```
 
 * **Transpose**
@@ -144,14 +155,16 @@ T const& operator[](size_t r, size_t c) const; // C++23
 * **Determinant (square only)**
 
   ```cpp
-  Type determinant() const;  // 1x1, 2x2 fast path; larger uses Laplace expansion
+  Type determinant() const;  // 1x1, 2x2 fast path; larger uses Laplace expansion (static_assert on non-square)
   ```
 
 * **Inverse (square only)**
 
   ```cpp
-  std::optional<Mat> inverted() const;  // nullopt if det == 0
+  std::optional<Mat> inverted() const;  // nullopt if |det| < numeric_limits<Type>::epsilon()
   ```
+
+  4x4 matrices use a dedicated closed-form inverse; other sizes use the adjugate / determinant path.
 
 * **Minors & cofactors (square only)**
 
@@ -179,9 +192,7 @@ T const& operator[](size_t r, size_t c) const; // C++23
   std::u8string to_u8string() const noexcept;
   ```
 
-// std::formatter specialization provided for char, wchar_t, char8_t
-
-````
+  A `std::formatter<omath::Mat<...>>` specialization is provided (it formats the same text as `to_string()`).
 
 ---
 
@@ -204,7 +215,7 @@ Mat<1,4,T,St> mat_row_from_vector(const Vector3<T>& v);
 
 template<class T=float, MatStoreType St=ROW_MAJOR>
 Mat<4,1,T,St> mat_column_from_vector(const Vector3<T>& v);
-````
+```
 
 ### Rotating a vector
 
@@ -224,6 +235,33 @@ template<class T=float, MatStoreType St=ROW_MAJOR>
 Mat<4,4,T,St> mat_translation(const Vector3<T>& d) noexcept;
 ```
 
+### Scale
+
+```cpp
+template<class T=float, MatStoreType St=ROW_MAJOR>
+Mat<4,4,T,St> mat_scale(const Vector3<T>& scale) noexcept;
+```
+
+### Extracting origin / scale / rotation
+
+```cpp
+template<class T=float, MatStoreType St=ROW_MAJOR>
+Vector3<T> mat_extract_origin(const Mat<4,4,T,St>& m) noexcept;   // translation column (0..2, 3)
+
+template<class T=float, MatStoreType St=ROW_MAJOR>
+Vector3<T> mat_extract_scale(const Mat<4,4,T,St>& m) noexcept;    // length of each basis column; 1 if ~0
+
+// Floating-point T only. Results are {x, y, z} in degrees.
+template<class T=float, MatStoreType St=ROW_MAJOR>
+Vector3<T> mat_extract_rotation_zyx(const Mat<4,4,T,St>& m) noexcept;
+template<class T=float, MatStoreType St=ROW_MAJOR>
+Vector3<T> mat_extract_rotation_yxz(const Mat<4,4,T,St>& m) noexcept;  // inverse of mat_rotation_yxz
+template<class T=float, MatStoreType St=ROW_MAJOR>
+Vector3<T> mat_extract_rotation_zxy(const Mat<4,4,T,St>& m) noexcept;  // inverse of mat_rotation_zxy
+```
+
+At the gimbal-lock singularity (|cos| of the middle angle ~ 0) the extractors pin one of the angles to 0 and fold the rotation into another.
+
 ### Axis rotations
 
 ```cpp
@@ -238,6 +276,24 @@ template<class T=float, MatStoreType St=ROW_MAJOR, class Angle>
 Mat<4,4,T,St> mat_rotation_axis_z(const Angle& a) noexcept;
 ```
 
+### Composed Euler rotations
+
+Closed-form equivalents of multiplying the axis matrices; each angle only needs `.sin()` and `.cos()`.
+
+```cpp
+// = axis_z(z) * axis_y(y) * axis_x(x)
+template<class T=float, MatStoreType St=ROW_MAJOR, class AngleZ, class AngleY, class AngleX>
+Mat<4,4,T,St> mat_rotation_zyx(const AngleZ& z, const AngleY& y, const AngleX& x) noexcept;
+
+// = axis_y(y) * axis_x(x) * axis_z(z)   (yaw * pitch * roll, Y-up engines)
+template<class T=float, MatStoreType St=ROW_MAJOR, class AngleY, class AngleX, class AngleZ>
+Mat<4,4,T,St> mat_rotation_yxz(const AngleY& y, const AngleX& x, const AngleZ& z) noexcept;
+
+// = axis_z(z) * axis_x(x) * axis_y(y)   (yaw * pitch * roll, Z-up engines)
+template<class T=float, MatStoreType St=ROW_MAJOR, class AngleZ, class AngleX, class AngleY>
+Mat<4,4,T,St> mat_rotation_zxy(const AngleZ& z, const AngleX& x, const AngleY& y) noexcept;
+```
+
 ### Camera/view
 
 ```cpp
@@ -250,21 +306,29 @@ Mat<4,4,T,St> mat_camera_view(const Vector3<T>& forward,
 
 ### Perspective projections
 
-```cpp
-template<class T=float, MatStoreType St=ROW_MAJOR>
-Mat<4,4,T,St> mat_perspective_left_handed (float fov_deg, float aspect, float near, float far) noexcept;
+All take `NDCDepthRange DepthRange = NEGATIVE_ONE_TO_ONE` as the third template parameter. FOV is in degrees.
 
-template<class T=float, MatStoreType St=ROW_MAJOR>
-Mat<4,4,T,St> mat_perspective_right_handed(float fov_deg, float aspect, float near, float far) noexcept;
+```cpp
+// Vertical FOV
+template<class T=float, MatStoreType St=ROW_MAJOR, NDCDepthRange D=NDCDepthRange::NEGATIVE_ONE_TO_ONE>
+Mat<4,4,T,St> mat_perspective_left_handed_vertical_fov (T fov, T aspect, T near, T far) noexcept;
+template<class T=float, MatStoreType St=ROW_MAJOR, NDCDepthRange D=NDCDepthRange::NEGATIVE_ONE_TO_ONE>
+Mat<4,4,T,St> mat_perspective_right_handed_vertical_fov(T fov, T aspect, T near, T far) noexcept;
+
+// Horizontal FOV (for engines that report horizontal FOV)
+template<class T=float, MatStoreType St=ROW_MAJOR, NDCDepthRange D=NDCDepthRange::NEGATIVE_ONE_TO_ONE>
+Mat<4,4,T,St> mat_perspective_left_handed_horizontal_fov (T hfov, T aspect, T near, T far) noexcept;
+template<class T=float, MatStoreType St=ROW_MAJOR, NDCDepthRange D=NDCDepthRange::NEGATIVE_ONE_TO_ONE>
+Mat<4,4,T,St> mat_perspective_right_handed_horizontal_fov(T hfov, T aspect, T near, T far) noexcept;
 ```
 
 ### Orthographic projections
 
 ```cpp
-template<class T=float, MatStoreType St=ROW_MAJOR>
+template<class T=float, MatStoreType St=ROW_MAJOR, NDCDepthRange D=NDCDepthRange::NEGATIVE_ONE_TO_ONE>
 Mat<4,4,T,St> mat_ortho_left_handed (T left, T right, T bottom, T top, T near, T far) noexcept;
 
-template<class T=float, MatStoreType St=ROW_MAJOR>
+template<class T=float, MatStoreType St=ROW_MAJOR, NDCDepthRange D=NDCDepthRange::NEGATIVE_ONE_TO_ONE>
 Mat<4,4,T,St> mat_ortho_right_handed(T left, T right, T bottom, T top, T near, T far) noexcept;
 ```
 
@@ -287,8 +351,8 @@ Mat<4,4,T,St> mat_look_at_right_handed(const Vector3<T>& eye,
 ## Screen-space helper
 
 ```cpp
-template<class Type=float>
-static constexpr Mat to_screen_mat(const Type& screen_w, const Type& screen_h) noexcept;   // 4x4 only; keeps Type and StoreType
+// Member of Mat; static_assert: 4x4 only. Keeps Type and StoreType.
+static constexpr Mat to_screen_mat(const Type& screen_w, const Type& screen_h) noexcept;
 // Maps NDC to screen space (origin top-left, y down)
 ```
 
@@ -306,7 +370,7 @@ V3 eye{0, 1, -5}, center{0, 0, 0}, up{0, 1, 0};
 M4 view = omath::mat_look_at_left_handed<float, omath::MatStoreType::COLUMN_MAJOR>(eye, center, up);
 
 float fov = 60.f, aspect = 16.f/9.f, n = 0.1f, f = 100.f;
-M4 proj = omath::mat_perspective_left_handed<float, omath::MatStoreType::COLUMN_MAJOR>(fov, aspect, n, f);
+M4 proj = omath::mat_perspective_left_handed_vertical_fov<float, omath::MatStoreType::COLUMN_MAJOR>(fov, aspect, n, f);
 
 // final VP
 M4 vp = proj * view;
@@ -360,14 +424,14 @@ concept MatTemplateEqual =
 
 * `std::invalid_argument` — initializer list dimensions mismatch.
 * `std::out_of_range` — out-of-bounds in `at()`. Checking is active only in debug builds (`NDEBUG` undefined) with `OMATH_SUPRESS_SAFETY_CHECKS` undefined.
-* `inverted()` does **not** throw; returns `std::nullopt` if `determinant() == 0`.
+* `inverted()` does **not** throw; returns `std::nullopt` if `|determinant()|` is below `std::numeric_limits<Type>::epsilon()`.
 
 ---
 
 ## Build switches
 
 * **`OMATH_USE_AVX2`** — enable AVX2 vectorized multiplication paths (`<immintrin.h>` required).
-* **Debug checks** — the `at()` method contains a conditional range check; refer to the preprocessor guard in the code to enable/disable in your configuration.
+* **`OMATH_SUPRESS_SAFETY_CHECKS`** (spelling as in the source) — disables the debug-only range check in `at()`.
 
 ---
 
@@ -381,9 +445,10 @@ concept MatTemplateEqual =
 ## See also
 
 * `omath::Vector3<T>`
-* Projection helpers: `mat_perspective_*`, `mat_ortho_*`
+* Projection helpers: `mat_perspective_*_vertical_fov`, `mat_perspective_*_horizontal_fov`, `mat_ortho_*`
 * View helpers: `mat_look_at_*`, `mat_camera_view`
-* Construction helpers: `mat_row_from_vector`, `mat_column_from_vector`, `mat_translation`, `mat_rotation_axis_*`
+* Construction helpers: `mat_row_from_vector`, `mat_column_from_vector`, `mat_translation`, `mat_scale`, `mat_rotation_axis_*`, `mat_rotation_{zyx,yxz,zxy}`
+* Extraction helpers: `mat_extract_origin`, `mat_extract_scale`, `mat_extract_rotation_{zyx,yxz,zxy}`
 * Vector helpers: `mat_rotate_vector`
 
 ---
@@ -399,8 +464,8 @@ Mat& operator=(const Mat&); Mat& operator=(Mat&&);
 
 static constexpr size_t row_count();
 static constexpr size_t columns_count();
-static consteval MatSize size();
-static constexpr MatStoreType get_store_ordering();
+static constexpr MatSize size();
+static consteval MatStoreType get_store_ordering();
 
 T& at(size_t r, size_t c);
 T const& at(size_t r, size_t c) const;
@@ -431,7 +496,7 @@ std::u8string to_u8string() const noexcept;
 
 constexpr bool operator==(const Mat&) const noexcept;   // != is synthesized by C++20
 
-// Helpers (see sections above)
+// Helpers (see sections above); std::formatter<Mat<...>> specialization provided
 ```
 
 ---

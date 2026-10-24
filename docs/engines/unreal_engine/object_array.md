@@ -22,7 +22,7 @@ get_object_by_index(std::uintptr_t g_objects, std::uint32_t index, const ObjectA
 address, which is exactly what [`get_actor_name`](actor_name.md) expects.
 
 `g_objects` is the address of `UObject::GObjObjects` on UE 2.5 and UE 3, and the address of `GUObjectArray` on UE 4
-and UE 5.
+and UE 5. `get_object_count` returns the number of slots, freed slots included.
 
 | Generation | `ObjectArrayKind` | Container |
 | --- | --- | --- |
@@ -30,6 +30,19 @@ and UE 5.
 | UE 4 with a fixed array | `FLAT` | `FFixedUObjectArray`, elements are `FUObjectItem` |
 | UE 4.11+, UE 5 | `CHUNKED` | `FChunkedFixedUObjectArray`, 64K `FUObjectItem` per chunk |
 | UE 4.0 - 4.10 | `CHUNKED` with `indirect_chunk_table = false` | chunk table inlined into the array object |
+
+## `ObjectArrayLayout` fields
+
+| Field | Default (`ue4()`) | Meaning |
+| --- | --- | --- |
+| `kind` | `CHUNKED` | `ObjectArrayKind`, see the table above |
+| `objects_offset` | `0x10` | `GObjects` to `TArray::Data` / `FUObjectArray::ObjObjects::Objects` |
+| `count_offset` | `0x24` | `GObjects` to `TArray::ArrayNum` / `FUObjectArray::ObjObjects::NumElements` |
+| `elements_per_chunk` | `64 * 1024` | `CHUNKED` only |
+| `indirect_chunk_table` | `true` | `CHUNKED` only: `objects_offset` holds a pointer to the chunk table (UE 4.11+, UE 5); `false` when the table is inlined (UE 4.0 - 4.10) |
+| `item_stride` | `0x18` | Size of one element: `sizeof(FUObjectItem)` on UE 4 / UE 5, a bare pointer on UE 2.5 / UE 3 |
+| `item_object_offset` | `0x0` | Element to its `UObject*` |
+| `pointer_size` | `8` | Size of a pointer in the **target** process, not in the process compiling this |
 
 ---
 

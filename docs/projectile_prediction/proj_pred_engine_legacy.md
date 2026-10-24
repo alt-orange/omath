@@ -6,7 +6,7 @@
 > Template: `ProjPredEngineLegacy<EngineTrait = source_engine::PredEngineTrait, ArithmeticType = float>`
 > Purpose: solve the **view angles** (and a matching aim point) that make a projectile launched from a [`Launcher`](launcher.md) hit a (possibly moving) [`Target`](target.md), using a **fixed-step time scan** and a **closed-form ballistic pitch** under constant gravity.
 
-> This class is kept under `OMATH_ENABLE_LEGACY`. It is portable and trait-driven; `ProjPredEngineAvx2` is the vectorised alternative for `float` on x86.
+> This is the portable, trait-driven engine; `ProjPredEngineAvx2` is the vectorised alternative for `float` on x86. The CMake option `OMATH_ENABLE_LEGACY` (default `ON`) defines a macro of the same name for the library, but `proj_pred_engine_legacy.hpp` does not test it, so the class is available either way.
 
 ---
 

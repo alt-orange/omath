@@ -32,13 +32,13 @@ public:
   // Predict projectile position after `time` seconds, launched from `launch_origin`
   static constexpr Vector3<float>
   predict_projectile_position(const Vector3<float>& launch_origin,
-                             const projectile_prediction::Projectile& projectile,
+                             const projectile_prediction::Projectile<float>& projectile,
                              float pitch, float yaw, float time,
                              float gravity) noexcept;
 
   // Predict target position after `time` seconds
   static constexpr Vector3<float>
-  predict_target_position(const projectile_prediction::Target& target,
+  predict_target_position(const projectile_prediction::Target<float>& target,
                          float time, float gravity) noexcept;
 
   // Compute horizontal (2D) distance

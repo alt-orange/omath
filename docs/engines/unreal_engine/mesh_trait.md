@@ -19,7 +19,7 @@
 * **Forward axis**: +X
 * **Right axis**: +Y
 * **Handedness**: Left-handed
-* **Rotation order**: Roll (Y) → Pitch (X) → Yaw (Z)
+* **Rotation**: `Rz(yaw) · Ry(-pitch) · Rx(-roll)` (`mat_rotation_zyx`), i.e. roll is applied first, then pitch, then yaw
 
 ---
 
@@ -84,19 +84,18 @@ auto matrix = my_mesh.get_to_world_matrix();
 
 Unreal uses a left-handed Z-up coordinate system:
 
-1. **Roll** (rotation around Y-axis / right axis)
-   * Positive roll rotates forward axis upward
+1. **Roll** (rotation around X-axis / forward axis)
    * Range: [-180°, 180°]
 
-2. **Pitch** (rotation around X-axis / forward axis)
+2. **Pitch** (rotation around Y-axis / right axis)
    * Positive pitch looks upward
-   * Range: typically [-89°, 89°]
+   * Range: [-90°, 90°]
 
 3. **Yaw** (rotation around Z-axis / up axis)
    * Positive yaw rotates clockwise when viewed from above (left-handed)
    * Range: [-180°, 180°]
 
-**Note**: Unreal applies rotations in Roll-Pitch-Yaw order, different from most other engines.
+**Note**: `rotation_matrix` negates pitch and roll before building the matrix, so positive pitch looks up.
 
 ---
 
@@ -104,9 +103,18 @@ Unreal uses a left-handed Z-up coordinate system:
 
 ```cpp
 namespace omath::unreal_engine {
+    // mesh.hpp
     using Mesh = primitives::Mesh<Mat4X4, ViewAngles, MeshTrait, float>;
+
+    // primitives.hpp
+    using BoxMesh   = primitives::Mesh<Mat4X4, ViewAngles, MeshTrait, primitives::Vertex<>,
+                                       std::array<Vector3<float>, 8>, std::array<Vector3<std::uint32_t>, 12>>;
+    using PlaneMesh = primitives::Mesh<Mat4X4, ViewAngles, MeshTrait, primitives::Vertex<>,
+                                       std::array<Vector3<float>, 4>, std::array<Vector3<std::uint32_t>, 2>>;
 }
 ```
+
+`BoxMesh` (8 vertices, 12 triangles) and `PlaneMesh` (4 vertices, 2 triangles) are fixed-size meshes declared in `primitives.hpp`. Unreal Engine has no `collider.hpp`, so there is no ready-made `MeshCollider` alias; wrap a mesh with `collision::MeshCollider<Mesh>` yourself if needed.
 
 ---
 

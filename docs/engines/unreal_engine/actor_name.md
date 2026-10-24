@@ -68,11 +68,31 @@ struct RpmTrait
     }
 };
 
-auto layout = NameLayout::ue3();
-layout.pointer_size = sizeof(std::uint32_t); // 64 bit tool reading a 32 bit game
+auto layout = NameLayout::ue3(); // already sets pointer_size to 4 for its x86 target
+layout.pointer_size = sizeof(std::uint32_t); // spelled out: a 64 bit tool reading a 32 bit game
 
 const auto name = get_actor_name<RpmTrait>(actor_address, g_names_address, layout);
 ```
+
+---
+
+## `NameLayout` fields
+
+| Field | Default (`ue4()`) | Meaning |
+| --- | --- | --- |
+| `object_name_offset` | `0x18` | `UObject` to its `FName` |
+| `name_number_offset` | `0x4` | `FName` to its instance `Number`, relative to the `FName`; `std::nullopt` when there is none (UE 2.5) |
+| `pool_kind` | `BLOCK_POOL` | `NamePoolKind`, see the table above |
+| `pool_data_offset` | `0x10` | `GNames` to the `TArray::Data` (`POINTER_ARRAY`), chunk table (`CHUNKED_ARRAY`) or block table (`BLOCK_POOL`) |
+| `pointer_size` | `8` | Size of a pointer in the **target** process, not in the process compiling this |
+| `elements_per_chunk` | `16384` | `CHUNKED_ARRAY` only |
+| `block_offset_bits` | `16` | `BLOCK_POOL` only |
+| `block_entry_stride` | `2` | `BLOCK_POOL` only |
+| `entry_flags_offset` | `0x0` | `FNameEntry` to `Index` (`POINTER_ARRAY`, `CHUNKED_ARRAY`) or to `FNameEntryHeader` (`BLOCK_POOL`) |
+| `entry_text_offset` | `0x2` | `FNameEntry` to the name characters |
+| `char_kind` | `PER_ENTRY_FLAG` | `NameCharKind`: `ANSI`, `WIDE` (UTF-16) or `PER_ENTRY_FLAG` (bit 0 of the entry flags selects wide) |
+| `header_length_shift` | `6` | `BLOCK_POOL` only: `FNameEntryHeader >> shift` is the length. `1` with `WITH_CASE_PRESERVING_NAME` |
+| `max_name_length` | `1024` | Read guard for null terminated names (`POINTER_ARRAY`, `CHUNKED_ARRAY`); also caps `BLOCK_POOL` lengths |
 
 ---
 

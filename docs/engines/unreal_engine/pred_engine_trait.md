@@ -30,38 +30,38 @@ namespace omath::unreal_engine {
 class PredEngineTrait final {
 public:
   // Predict projectile position after `time` seconds
-  static constexpr Vector3<float>
+  static Vector3<double>
   predict_projectile_position(const Vector3<double>& launch_origin,
-                             const projectile_prediction::Projectile& projectile,
-                             float pitch, float yaw, float time,
-                             float gravity) noexcept;
+                             const projectile_prediction::Projectile<double>& projectile,
+                             double pitch, double yaw, double time,
+                             double gravity) noexcept;
 
   // Predict target position after `time` seconds
-  static constexpr Vector3<float>
-  predict_target_position(const projectile_prediction::Target& target,
-                         float time, float gravity) noexcept;
+  static Vector3<double>
+  predict_target_position(const projectile_prediction::Target<double>& target,
+                         double time, double gravity) noexcept;
 
   // Compute horizontal (2D) distance
-  static float
-  calc_vector_2d_distance(const Vector3<float>& delta) noexcept;
+  static double
+  calc_vector_2d_distance(const Vector3<double>& delta) noexcept;
 
   // Get vertical coordinate (Z in Unreal Engine)
-  static constexpr float
-  get_vector_height_coordinate(const Vector3<float>& vec) noexcept;
+  static double
+  get_vector_height_coordinate(const Vector3<double>& vec) noexcept;
 
   // Forward, right and up of the view frame for the given angles
   static constexpr projectile_prediction::ViewBasis<double>
   calc_view_basis(double pitch, double yaw) noexcept;
 
   // Compute pitch angle to look at target
-  static float
-  calc_direct_pitch_angle(const Vector3<float>& origin,
-                         const Vector3<float>& view_to) noexcept;
+  static double
+  calc_direct_pitch_angle(const Vector3<double>& origin,
+                         const Vector3<double>& view_to) noexcept;
 
   // Compute yaw angle to look at target
-  static float
-  calc_direct_yaw_angle(const Vector3<float>& origin,
-                       const Vector3<float>& view_to) noexcept;
+  static double
+  calc_direct_yaw_angle(const Vector3<double>& origin,
+                       const Vector3<double>& view_to) noexcept;
 };
 
 } // namespace omath::unreal_engine
@@ -160,27 +160,27 @@ Rotates the engine's world axes by the given view angles (trait pitch is positiv
 using namespace omath::unreal_engine;
 using namespace omath::projectile_prediction;
 
-Projectile proj{
+Projectile<double> proj{
   .m_origin = {0, 0, 200},
-  .m_launch_speed = 5000.0f,
-  .m_gravity_scale = 1.0f
+  .m_launch_speed = 5000.0,
+  .m_gravity_scale = 1.0
 };
 
-Target tgt{
+Target<double> tgt{
   .m_origin = {2000, 1000, 200},
   .m_velocity = {50, 20, 0},
   .m_is_airborne = false
 };
 
-float gravity = 980.0f;  // cm/s² in Unreal units
-float time = 0.5f;
+double gravity = 980.0;  // cm/s² in Unreal units
+double time = 0.5;
 
 // Predict where target will be
 auto target_pos = PredEngineTrait::predict_target_position(tgt, time, gravity);
 
 // Compute aim angles
-float pitch = PredEngineTrait::calc_direct_pitch_angle(proj.m_origin, target_pos);
-float yaw   = PredEngineTrait::calc_direct_yaw_angle(proj.m_origin, target_pos);
+double pitch = PredEngineTrait::calc_direct_pitch_angle(proj.m_origin, target_pos);
+double yaw   = PredEngineTrait::calc_direct_yaw_angle(proj.m_origin, target_pos);
 
 // Predict projectile position with those angles
 auto proj_pos = PredEngineTrait::predict_projectile_position(proj.m_origin, proj, pitch, yaw, time, gravity);

@@ -8,30 +8,32 @@ Common questions and answers about OMath.
 
 ### What is OMath?
 
-OMath is a modern C++ math library designed for game development, graphics programming, and high-performance computing. It provides:
-- Vector and matrix operations
+OMath is a modern C++23 math library designed for game development, graphics programming, and high-performance computing. It provides:
+- Vector, matrix and quaternion operations
 - 3D projection and camera systems
-- Projectile prediction
-- Collision detection
-- Support for multiple game engines (Source, Unity, Unreal, etc.)
-- Pattern scanning utilities
+- Projectile prediction (including air drag)
+- Collision detection (ray tracing, GJK/EPA, AABB/OBB)
+- Pathfinding and a walk bot
+- Support for multiple game engines (Source, Unity, Unreal, Frostbite, IW Engine, CryEngine, RAGE, Serious Engine, OpenGL)
+- A HUD/ESP overlay toolkit, DirectX/OpenGL hooking and Lua bindings (opt-in)
+- Reverse engineering helpers and pattern scanning for PE, ELF and Mach-O
 
 ### Why choose OMath over other math libraries?
 
-- **Modern C++**: Uses C++20/23 features (concepts, `constexpr`, `std::expected`)
+- **Modern C++**: Uses C++23 features (concepts, `constexpr`, `std::expected`, `if consteval`, multidimensional `operator[]`)
 - **No legacy code**: Built from scratch without legacy baggage
-- **Game engine support**: Pre-configured for Source, Unity, Unreal, Frostbite, etc.
-- **Zero dependencies**: No external dependencies needed (except for testing)
+- **Game engine support**: Pre-configured for nine engine conventions
+- **Few dependencies**: The core needs nothing; ImGui, Lua and safetyhook are required only by the optional features
 - **Performance**: AVX2 optimizations available
 - **Type safety**: Strong typing prevents common errors
 - **Cross-platform**: Works on Windows, Linux, and macOS
 
 ### Is OMath suitable for production use?
 
-Yes! OMath is production-ready and used in various projects. It has:
-- Comprehensive test coverage
+Yes! OMath is used in various projects. It has:
+- A large unit test suite
 - Clear error handling
-- Well-documented API
+- A documented API
 - Active maintenance and community support
 
 ---
@@ -40,7 +42,7 @@ Yes! OMath is production-ready and used in various projects. It has:
 
 ### How do I install OMath?
 
-Three main methods:
+Four main methods:
 
 **vcpkg (recommended):**
 ```bash
@@ -52,25 +54,38 @@ vcpkg install orange-math
 xrepo install omath
 ```
 
+**Conan:**
+```bash
+conan install --requires="omath/[*]" --build=missing
+```
+
 **From source:**
 See [Installation Guide](install.md)
 
 ### What are the minimum requirements?
 
-- **Compiler**: C++20 support required
-  - GCC 10+
-  - Clang 11+
-  - MSVC 2019 16.10+
-- **CMake**: 3.15+ (if building from source)
-- **Platform**: Windows, Linux, or macOS
+- **Compiler**: C++23 support required. The project documents:
+  - GCC 14+
+  - Clang 18+
+  - MSVC 19.38+ (Visual Studio 2022 17.8 or newer)
+- **CMake**: 3.26+ (if building from source), 3.28+ for the C++ module
+- **Platform**: Windows, Linux, or macOS (the hooks: Windows and Linux)
 
 ### Do I need C++23?
 
-C++23 is **recommended** but not required. Some features like `std::expected` work better with C++23, but fallbacks are available for C++20.
+Yes. The `omath` target requires `cxx_std_23`. The headers use `std::expected`, `if consteval`, multidimensional `operator[]` and other C++23 features, so there is no C++20 fallback.
 
-### Can I use OMath in a C++17 project?
+### Can I use OMath in a C++17 or C++20 project?
 
-No, OMath requires C++20 minimum due to use of concepts, `constexpr` enhancements, and other C++20 features.
+No, OMath requires C++23.
+
+### How do I turn on the HUD ImGui renderer, hooks or Lua bindings?
+
+They are build options: `OMATH_IMGUI_INTEGRATION`, `OMATH_ENABLE_HOOKING` and `OMATH_ENABLE_LUA` (vcpkg features `imgui`, `hooking`, `lua`). See [Optional features](install.md#optional-features).
+
+### Can I use OMath as a C++ module?
+
+Yes, build with `OMATH_ENABLE_MODULES=ON` (CMake 3.28+) and write `import omath;`.
 
 ---
 
@@ -78,7 +93,7 @@ No, OMath requires C++20 minimum due to use of concepts, `constexpr` enhancement
 
 ### How do I include OMath in my project?
 
-**Full library:**
+**Most of the library:**
 ```cpp
 #include <omath/omath.hpp>
 ```
@@ -89,38 +104,47 @@ No, OMath requires C++20 minimum due to use of concepts, `constexpr` enhancement
 #include <omath/engines/source_engine/camera.hpp>
 ```
 
+`omath.hpp` does not include everything. Include these explicitly when you need them: `omath/algorithm/radar.hpp`, `omath/algorithm/targeting.hpp`, `omath/pathfinding/walk_bot.hpp`, `omath/3d_primitives/aabb.hpp`/`obb.hpp`/`mesh.hpp`, the per-engine `mesh.hpp`/`collider.hpp`/`primitives.hpp`, `omath/collision/mesh_collider.hpp`, `omath/utility/elf_pattern_scan.hpp`, `omath/utility/macho_pattern_scan.hpp`, `omath/hud/*`, `omath/hooks/hooks_manager.hpp`, `omath/lua/lua.hpp` and `omath/containers/encrypted_variable.hpp`.
+
 ### Which game engine should I use?
 
 Choose based on your target game or application:
 
-| Engine | Use For |
-|--------|---------|
-| **Source Engine** | CS:GO, TF2, CS2, Half-Life, Portal, L4D |
-| **Unity Engine** | Unity games (many indie and mobile games) |
-| **Unreal Engine** | Fortnite, Unreal games |
-| **Frostbite** | Battlefield, Star Wars games (EA titles) |
-| **IW Engine** | Call of Duty series |
-| **OpenGL** | Custom OpenGL applications, generic 3D |
+| Engine | Namespace | Use For |
+|--------|-----------|---------|
+| **Source Engine** | `omath::source_engine` | CS:GO, TF2, CS2, Half-Life, Portal, L4D |
+| **Unity Engine** | `omath::unity_engine` | Unity games (many indie and mobile games) |
+| **Unreal Engine** | `omath::unreal_engine` | Fortnite, Unreal games (double precision) |
+| **Frostbite** | `omath::frostbite_engine` | Battlefield, Star Wars games (EA titles) |
+| **IW Engine** | `omath::iw_engine` | Call of Duty series |
+| **CryEngine** | `omath::cry_engine` | CryEngine titles |
+| **RAGE** | `omath::rage_engine` | Rockstar's RAGE titles such as GTA V |
+| **Serious Engine** | `omath::serious_engine` | Serious Sam and other Serious Engine titles |
+| **OpenGL** | `omath::opengl_engine` | Custom OpenGL applications, generic 3D |
 
 ### How do I switch between engines?
 
-Just change the namespace:
+Change the namespace, ideally through an alias so there is one line to edit:
 
 ```cpp
 // Source Engine
-using namespace omath::source_engine;
-Camera cam = /* ... */;
+namespace eng = omath::source_engine;
+eng::Camera cam = /* ... */;
 
 // Unity Engine
-using namespace omath::unity_engine;
-Camera cam = /* ... */;
+namespace eng = omath::unity_engine;
+eng::Camera cam = /* ... */;
 ```
 
-Each engine has the same API but different coordinate system handling.
+Each engine has the same shape of API (`Camera`, `ViewAngles`, `PitchAngle`, `Mat4X4`, `CameraTrait`, `PredEngineTrait`, ...) but different coordinate system handling. The types are not interchangeable: a Unity camera takes Unity `ViewAngles`, and Unreal uses `double` throughout.
+
+### Why is `ViewAngles` ambiguous?
+
+`omath::ViewAngles` is a class template and every engine namespace defines an alias called `ViewAngles`. `using namespace omath;` together with `using namespace omath::source_engine;` therefore makes the name ambiguous. Use a namespace alias (`namespace se = omath::source_engine;`) or qualify the name.
 
 ### What if my game isn't listed?
 
-Use the **OpenGL engine** as a starting point - it uses canonical OpenGL conventions. You may need to adjust coordinate transformations based on your specific game.
+Use the **OpenGL engine** as a starting point - it uses canonical OpenGL conventions. You may need to adjust coordinate transformations based on your specific game, or write your own engine trait (see [below](#can-i-extend-omath-with-custom-engine-traits)).
 
 ---
 
@@ -128,62 +152,71 @@ Use the **OpenGL engine** as a starting point - it uses canonical OpenGL convent
 
 ### Should I use the AVX2 or Legacy engine?
 
-**Use AVX2 if:**
-- Target modern CPUs (2013+)
-- Need maximum performance
-- Can accept reduced compatibility
+**Use `ProjPredEngineAvx2` if:**
+- You target x86-64 and built OMath with `OMATH_USE_AVX2`
+- Your game uses Source-style axes (z up, yaw about z) and `float`
 
-**Use Legacy if:**
-- Need broad compatibility
-- Target older CPUs or ARM
+**Use `ProjPredEngineLegacy` if:**
+- You need broad compatibility (ARM, builds without AVX2)
+- You use another engine trait or `double`
 - Unsure about target hardware
 
-The API is identical - just change the class:
+Both implement `ProjPredEngineInterface`, so the call is the same, but the constructors differ:
 ```cpp
-// Legacy (compatible)
-ProjPredEngineLegacy engine;
+using namespace omath::projectile_prediction;
 
-// AVX2 (faster)
-ProjPredEngineAVX2 engine;
+// Legacy (portable, any engine trait)
+ProjPredEngineLegacy<> legacy(/*gravity*/ 800.f, /*step*/ 1.f / 1000.f, /*horizon*/ 10.f, /*tolerance*/ 5.f);
+
+// AVX2 (float, Source-style axes; every call throws if the build has no AVX2)
+ProjPredEngineAvx2 fast(/*gravity*/ 800.f, /*step*/ 1.f / 1000.f, /*horizon*/ 10.f);
+
+// Drag (rounds with air drag, step should be the game's physics tick)
+ProjPredEngineDrag<> drag(/*gravity*/ 800.f, /*step*/ 0.015f, /*horizon*/ 10.f, /*tolerance*/ 5.f);
 ```
 
-### How much faster is AVX2?
+### Which prediction engine handles air drag?
 
-Typically 2-4x faster for projectile prediction calculations, depending on the CPU and specific use case.
+`ProjPredEngineDrag`. Set `Projectile::m_drag` (or `m_drag_forward`/`m_drag_up`) and `m_max_speed`. The closed-form engines assume a parabola and ignore drag. See [Drag engine](projectile_prediction/proj_pred_engine_drag.md).
 
 ### Are vector operations constexpr?
 
 Yes! Most operations are `constexpr` and can be evaluated at compile-time:
 
 ```cpp
-constexpr Vector3<float> v{1, 2, 3};
+constexpr omath::Vector3<float> v{1, 2, 3};
 constexpr auto len_sq = v.length_sqr();  // Computed at compile time
 ```
 
 ### Is OMath thread-safe?
 
-- **Immutable operations** (vector math, etc.) are thread-safe
-- **Mutable state** (Camera updates) is NOT thread-safe
+- **Value types** (vectors, matrices, angles) have no shared state
+- **Cameras** cache their matrices lazily, so a camera must not be shared between threads, even for read-only calls
 - Use separate instances per thread or synchronize access
 
 ---
 
 ## Troubleshooting
 
-### `world_to_screen()` always returns `nullopt`
+### `world_to_screen()` always fails
 
-Check:
-1. **Is the point behind the camera?** Points behind the camera cannot be projected.
-2. **Are near/far planes correct?** Ensure `near < far` and both are positive.
-3. **Is FOV valid?** FOV should be between 1° and 179°.
-4. **Are camera angles normalized?** Use engine-provided angle types.
+`world_to_screen()` returns `std::expected<Vector3, projection::Error>`; look at `.error()`:
+- `PERSPECTIVE_DIVIDER_LESS_EQ_ZERO`: the point is behind the camera
+- `WORLD_POSITION_IS_OUT_OF_SCREEN_BOUNDS`: the point projects outside the screen (use `world_to_screen_unclipped()` if you still want it)
+
+If every point fails, check:
+1. **Are near/far planes correct?** Ensure `near < far` and both are positive.
+2. **Is FOV valid?** It is clamped to [0, 180] degrees; use a normal value such as 60-120.
+3. **Are camera angles in the engine's range?** Use the engine-provided angle types.
+4. **Is the viewport non-zero?** `ViewPort{width, height}` must not be `{0, 0}`.
+5. **Right engine?** The wrong engine trait puts points behind the camera.
 
 ### Angles are wrapping incorrectly
 
 Use the correct angle type:
 ```cpp
-// Good: uses proper angle type
-PitchAngle pitch = PitchAngle::from_degrees(45.0f);
+// Good: uses the engine's angle type (Source: pitch clamped to +-89)
+auto pitch = omath::source_engine::PitchAngle::from_degrees(45.0f);
 
 // Bad: raw float loses normalization
 float pitch = 45.0f;
@@ -192,38 +225,44 @@ float pitch = 45.0f;
 ### Projection seems mirrored or inverted
 
 You may be using the wrong engine trait. Each engine has different coordinate conventions:
-- **Source/Unity**: Z-up
-- **Unreal**: Z-up, different handedness
-- **OpenGL**: Y-up
+
+| Engine | Up | Right | Forward |
+|--------|----|-------|---------|
+| Source, IW Engine | +Z | -Y | +X |
+| Unreal | +Z | +Y | +X |
+| CryEngine, RAGE | +Z | +X | +Y |
+| Unity, Frostbite | +Y | +X | +Z |
+| OpenGL, Serious Engine | +Y | +X | -Z |
 
 Ensure you're using the trait matching your game.
 
 ### Pattern scanning finds multiple matches
 
-This is normal! Patterns may appear multiple times. Solutions:
+This is normal! Patterns may appear multiple times, and `scan_for_pattern` returns the first one. Solutions:
 1. Make the pattern more specific (more bytes, fewer wildcards)
 2. Use additional context (nearby code patterns)
 3. Verify each match programmatically
 
+### My pattern is not found
+
+Check the pattern string: every byte is exactly two hex digits (`4A`), wildcards are `?` or `??`, and tokens are separated by spaces. A token with three or more characters (for example `488B05`) is silently skipped, which shortens the pattern. `scan_for_pattern` returns `end` for "not found" and for an invalid pattern. The compile-time overload `scan_for_pattern<"48 8B ??">(...)` rejects bad patterns at compile time.
+
 ### Projectile prediction returns `nullopt`
 
 Common reasons:
-1. **Target too fast**: Target velocity exceeds projectile speed
-2. **Out of range**: Distance exceeds max flight time
-3. **Invalid input**: Check projectile speed > 0
-4. **Gravity too strong**: Projectile can't reach target height
+1. **Target too fast**: The round cannot catch the target
+2. **Out of range**: The flight would take longer than `maximum_simulation_time`
+3. **Invalid input**: A non-positive time step or horizon returns `nullopt` immediately; a launch speed of zero never reaches anything
+4. **Pitch limit**: The needed pitch is outside what the engine lets the view look at
+5. **`ProjPredEngineAvx2` in a non-AVX2 build**: it throws instead of returning `nullopt`
+
+### `HooksManager` has no `hook_dx11` (or any other hook method)
+
+The library was built without `OMATH_ENABLE_HOOKING`. In that case `HooksManager` is an empty stub that only offers `get()`. Rebuild with the option (or the `hooking` vcpkg feature).
 
 ### Compilation errors about `std::expected`
 
-If using C++20 (not C++23), you may need a backport library like `tl::expected`:
-
-```cmake
-# CMakeLists.txt
-find_package(tl-expected CONFIG REQUIRED)
-target_link_libraries(your_target PRIVATE tl::expected)
-```
-
-Or upgrade to C++23 if possible.
+OMath requires C++23. Make sure `CMAKE_CXX_STANDARD` is at least 23 (linking `omath::omath` already requires `cxx_std_23`) and that your standard library ships `<expected>` (GCC 12+, Clang 16+ with libstdc++ 12 or libc++, MSVC 19.33+).
 
 ---
 
@@ -231,46 +270,57 @@ Or upgrade to C++23 if possible.
 
 ### Can I use OMath with DirectX/OpenGL/Vulkan?
 
-Yes! OMath matrices and vectors work with all graphics APIs. Use:
+Yes! OMath produces view and projection matrices and projects points for any graphics API. Pick the engine whose conventions match your renderer, mind the NDC depth range (the OpenGL engine uses -1..1, all other engines 0..1), and use:
 - **OpenGL**: `opengl_engine` traits
-- **DirectX**: Use appropriate engine trait or OpenGL as base
+- **DirectX**: Use the appropriate engine trait or OpenGL as base
 - **Vulkan**: Use OpenGL traits as starting point
+
+`HooksManager` can hook DirectX 9/11/12 and OpenGL for you. Vulkan is not hooked.
+
+### Can I draw an ESP overlay with OMath?
+
+Yes. The [HUD toolkit](hud/overview.md) describes boxes, bars, labels, skeletons, crosshairs and more as widget structs, and `ImguiHudRenderer` draws them through ImGui (`OMATH_IMGUI_INTEGRATION`). To draw inside another process combine it with [HooksManager](hooks/hooks_manager.md); the `examples/` directory has complete DLLs.
+
+### Can I script OMath from Lua?
+
+Yes, build with `OMATH_ENABLE_LUA` and call `omath::lua::LuaInterpreter::register_lib(L)`. See [Lua scripting](lua/lua.md).
 
 ### Does OMath support quaternions?
 
-Not currently. Quaternion support may be added in future versions. For now, use euler angles (ViewAngles) or convert manually.
+Yes. `omath::Quaternion<T>` supports `from_axis_angle()`, multiplication, `rotate()` and conversion to 3x3/4x4 rotation matrices. Cameras still use Euler `ViewAngles`. See [Quaternion](linear_algebra/quaternion.md).
+
+### Can I scan ELF and Mach-O binaries?
+
+Yes. `ElfPatternScanner` and `MachOPatternScanner` mirror `PePatternScanner`: files, in-memory file images and loaded modules. See [ELF](utility/elf_pattern_scan.md) and [Mach-O](utility/macho_pattern_scan.md).
 
 ### Can I extend OMath with custom engine traits?
 
-Yes! Implement the `CameraEngineConcept`:
+Yes! A camera trait only has to satisfy `CameraEngineConcept`: three `static constexpr noexcept` functions that return exactly your matrix and view-angle types.
 
 ```cpp
-class MyEngineTrait {
-public:
-    static ViewAngles calc_look_at_angle(
-        const Vector3<float>& origin,
-        const Vector3<float>& target
-    );
-    
-    static Mat4X4 calc_view_matrix(
-        const ViewAngles& angles,
-        const Vector3<float>& origin
-    );
-    
-    static Mat4X4 calc_projection_matrix(
-        const FieldOfView& fov,
-        const ViewPort& viewport,
-        float near, float far
-    );
+#include <omath/projection/camera.hpp>
+
+struct MyEngineTrait final {
+    static constexpr MyViewAngles
+    calc_look_at_angle(const omath::Vector3<float>& cam_origin, const omath::Vector3<float>& look_at) noexcept;
+
+    static constexpr MyMat4X4
+    calc_view_matrix(const MyViewAngles& angles, const omath::Vector3<float>& cam_origin) noexcept;
+
+    static constexpr MyMat4X4
+    calc_projection_matrix(const omath::projection::FieldOfView& fov, const omath::projection::ViewPort& view_port,
+                           float near_plane, float far_plane, omath::NDCDepthRange ndc_depth_range) noexcept;
 };
 
 // Use with Camera
-using MyCamera = Camera<Mat4X4, ViewAngles, MyEngineTrait>;
+using MyCamera = omath::projection::Camera<MyMat4X4, MyViewAngles, MyEngineTrait, omath::NDCDepthRange::ZERO_TO_ONE>;
 ```
+
+`MyMat4X4` is an `omath::Mat<4, 4, float, ...>` and `MyViewAngles` an `omath::ViewAngles<Pitch, Yaw, Roll>` of your own angle types. Optional `extract_rotation_angles()` and `calc_field_of_view()` let the camera recover data from matrices. For projectile prediction implement the `PredEngineConcept` ([details](projectile_prediction/pred_engine_concept.md)). The built-in traits, for example the [Source camera trait](engines/source_engine/camera_trait.md), are good templates.
 
 ### Does OMath support SIMD for vector operations?
 
-AVX2 support is available for projectile prediction. General vector SIMD may be added in future versions. The library already compiles to efficient code with compiler optimizations enabled.
+AVX2 (`OMATH_USE_AVX2`) is used by the matrix multiply, the pattern scanner and the AVX2 projectile engine. The vector types are plain `constexpr` code that compilers vectorize themselves.
 
 ### Can I use OMath for machine learning?
 
@@ -282,44 +332,43 @@ OMath is optimized for game development and graphics, not ML. For machine learni
 
 ### How do I print vectors?
 
-OMath provides `std::formatter` support:
+OMath provides `std::formatter` support for vectors, quaternions, angles and colors:
 
 ```cpp
 #include <format>
 #include <iostream>
 
-Vector3<float> v{1, 2, 3};
+omath::Vector3<float> v{1, 2, 3};
 std::cout << std::format("{}", v) << "\n";  // Prints: [1, 2, 3]
 ```
 
+Matrices have `to_string()` (and a `std::formatter` too).
+
 ### How do I visualize projection problems?
 
-1. Check if `world_to_screen()` succeeds
+1. Check if `world_to_screen()` succeeds and which `Error` it gives
 2. Print camera matrices:
    ```cpp
-   auto view = camera.get_view_matrix();
-   auto proj = camera.get_projection_matrix();
-   // Print matrix values
+   std::cout << camera.get_view_matrix().to_string() << "\n";
+   std::cout << camera.get_projection_matrix().to_string() << "\n";
    ```
-3. Test with known good points (e.g., origin, simple positions)
+3. Test with known good points (e.g., a point straight ahead of the camera)
 4. Verify viewport and FOV values
 
 ### How can I debug pattern scanning?
 
 ```cpp
-PatternView pattern{"48 8B 05 ?? ?? ?? ??"};
+std::span<std::byte> view{memory};
 
-// Print pattern details
-std::cout << "Pattern length: " << pattern.size() << "\n";
-std::cout << "Pattern bytes: ";
-for (auto byte : pattern) {
-    if (byte.has_value()) {
-        std::cout << std::hex << (int)*byte << " ";
-    } else {
-        std::cout << "?? ";
-    }
+// Does the pattern exist at all?
+const auto it = omath::PatternScanner::scan_for_pattern(view, "48 8B 05 ?? ?? ?? ??");
+if (it == view.end()) {
+    std::cout << "not found (or the pattern string is invalid)\n";
+} else {
+    std::cout << "offset " << (it - view.begin()) << "\n";
 }
-std::cout << "\n";
+
+// Narrow the pattern down until it matches, then widen it again
 ```
 
 ---
@@ -400,7 +449,3 @@ Check our [YouTube channel](https://youtu.be/lM_NJ1yCunw?si=-Qf5yzDcWbaxAXGQ) fo
 - Check [tutorials](tutorials.md)
 - Ask on [Discord](https://discord.gg/eDgdaWbqwZ)
 - Open a [GitHub issue](https://github.com/orange-cpp/omath/issues)
-
----
-
-*Last updated: 1 Nov 2025*

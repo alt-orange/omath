@@ -1,10 +1,11 @@
 # `omath::ViewAngles` — tiny POD for pitch/yaw/roll
 
-> Header: your project’s `view_angles.hpp`
+> Header: `omath/trigonometry/view_angles.hpp`
 > Namespace: `omath`
-> Kind: **aggregate struct** (POD), no methods, no allocation
+> Kind: **aggregate struct**, one helper method (`as_vector3()`), no allocation
+> Requires: all three component types expose the same `ArithmeticType` (as `omath::Angle<>` does)
 
-A minimal container for Euler angles. You choose the types for each component (e.g., raw `float` or the strong `omath::Angle<>` type), and plug it into systems like `projection::Camera`.
+A minimal container for Euler angles. You choose the component types (normally `omath::Angle<>` specializations, which provide the required `ArithmeticType` member), and plug it into systems like `projection::Camera`.
 
 ---
 
@@ -13,15 +14,23 @@ A minimal container for Euler angles. You choose the types for each component (e
 ```cpp
 namespace omath {
   template<class PitchType, class YawType, class RollType>
+  requires std::is_same_v<typename PitchType::ArithmeticType, typename YawType::ArithmeticType>
+        && std::is_same_v<typename YawType::ArithmeticType,  typename RollType::ArithmeticType>
   struct ViewAngles {
+    using ArithmeticType = PitchType::ArithmeticType;
+
     PitchType pitch;
     YawType   yaw;
     RollType  roll;
+
+    // {pitch, yaw, roll} in degrees
+    constexpr Vector3<ArithmeticType> as_vector3() const;
   };
 }
 ```
 
 * Aggregate: supports brace-init, aggregate copying, and `constexpr` usage when the component types do.
+* Component types must define `ArithmeticType`; plain `float` does **not** satisfy the constraint, so `ViewAngles<float, float, float>` does not compile.
 * Semantics (units/handedness/ranges) are **entirely defined by your chosen types**.
 
 ---
@@ -29,10 +38,7 @@ namespace omath {
 ## Common aliases
 
 ```cpp
-// Simple, raw degrees as floats (be careful with wrapping!)
-using ViewAnglesF = omath::ViewAngles<float, float, float>;
-
-// Safer, policy-based angles (recommended)
+// Policy-based angles
 using PitchDeg = omath::Angle<float, -89.f,  89.f,  omath::AngleFlags::Clamped>;
 using YawDeg   = omath::Angle<float, -180.f, 180.f, omath::AngleFlags::Normalized>;
 using RollDeg  = omath::Angle<float, -180.f, 180.f, omath::AngleFlags::Normalized>;
@@ -43,10 +49,11 @@ using ViewAnglesDeg = omath::ViewAngles<PitchDeg, YawDeg, RollDeg>;
 
 ## Examples
 
-### Basic construction
+### Reading back as a vector
 
 ```cpp
-omath::ViewAngles<float,float,float> a{ 10.f, 45.f, 0.f };   // pitch, yaw, roll in degrees
+ViewAnglesDeg v{ PitchDeg::from_degrees(10.f), YawDeg::from_degrees(45.f), RollDeg::from_degrees(0.f) };
+omath::Vector3<float> deg = v.as_vector3();   // (10, 45, 0): pitch, yaw, roll in degrees
 ```
 
 ### With `omath::Angle<>` (automatic wrap/clamper)
@@ -84,4 +91,4 @@ Cam cam(/*position*/ {0,1.7f,-3},
 
 * **Ranges/units**: pick types that encode your policy (e.g., signed yaw in `[-180,180]`, pitch clamped to avoid gimbal flips).
 * **Handedness & order**: this struct doesn’t impose rotation order. Your math/trait layer (e.g., `MyCameraTrait`) must define how `(pitch, yaw, roll)` map to a view matrix (common orders: ZYX or XYZ).
-* **Zero-cost**: with plain `float`s this is as cheap as three scalars; with `Angle<>` you gain safety at the cost of tiny wrap/clamp logic on construction/arithmetic.
+* **Zero-cost**: it holds three `Angle<>` values; the wrap/clamp logic runs only on construction/arithmetic of those angles.

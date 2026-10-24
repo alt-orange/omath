@@ -1,6 +1,6 @@
 # `omath::rev_eng::ExternalReverseEngineeredObject` — typed offsets over external memory
 
-> Header: `omath/rev_eng/external_reverse_engineered_object.hpp`
+> Header: `omath/rev_eng/external_rev_object.hpp`
 > Namespace: `omath::rev_eng`
 > Pattern: **CRTP-style wrapper** around a user-provided *ExternalMemoryManagementTrait* that actually reads/writes another process or device’s memory.
 
@@ -20,7 +20,7 @@ public:
 protected:
   template<class Type>
   [[nodiscard]] Type get_by_offset(std::ptrdiff_t offset) const {
-    return ExternalMemoryManagementTrait::read_memory(m_object_address + offset);
+    return ExternalMemoryManagementTrait::template read_memory<Type>(m_object_address + offset);
   }
 
   template<class Type>
@@ -53,6 +53,8 @@ static void write_memory(std::uintptr_t absolute_address, const T& value);
 >
 > * make `write_memory` `void` and throw/log internally, or
 > * adjust `set_by_offset` in your fork to surface the status.
+
+The in-process counterpart `omath::rev_eng::InternalMemoryTrait` (see [memory_trait.md](memory_trait.md)) provides `read_memory` only, so it satisfies the `MemoryReadTrait` concept but not the `write_memory` requirement of this class.
 
 ### Common implementations
 
@@ -116,6 +118,7 @@ p.set_health(100.f);
 * **Thread safety**: the class itself is stateless; thread safety depends on your trait implementation.
 * **Endianness**: assumes the host and target endianness agree, or your trait handles conversion.
 * **Error handling**: this header doesn’t prescribe it; adopt exceptions/expected/logging inside the trait.
+* **Constness**: `set_by_offset` is a `const` member (the wrapper itself is not modified, only the external memory).
 
 ---
 
@@ -149,6 +152,13 @@ struct LinuxPvmTrait {
   }
 };
 ```
+
+---
+
+## See also
+
+* [`InternalReverseEngineeredObject`](internal_rev_object.md) — same idea for objects in the current process
+* [Memory traits](memory_trait.md) — `MemoryReadTrait`, `InternalMemoryTrait`, `read_pointer`
 
 ---
 

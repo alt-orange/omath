@@ -1,15 +1,18 @@
 # `omath::PePatternScanner` — Scan PE images for byte patterns
 
-> Header: your project’s `pe_pattern_scanner.hpp`
+> Header: `omath/utility/pe_pattern_scan.hpp`
 > Namespace: `omath`
-> Platform: **Windows / PE (Portable Executable) images**
-> Depends on: `<filesystem>`, `<optional>`, `<cstdint>`
+> Platform: **PE (Portable Executable) images**. The loaded-module scan needs a PE image mapped in this process; the file and memory-file scans parse the PE headers themselves and use no Windows API
+> Depends on: `omath/utility/pattern_scan.hpp`, `omath/utility/section_scan_result.hpp`, `<filesystem>`, `<optional>`, `<cstdint>`, `<span>`
 > Companion: works well with `omath::PatternScanner` (same pattern grammar)
 
 `PePatternScanner` searches **Portable Executable (PE)** binaries for a hex pattern (with wildcards). You can scan:
 
 * a **loaded module** in the current process, or
-* a **PE file on disk** (by section name; defaults to **`.text`**).
+* a **PE file on disk**, or
+* a **PE file already read into memory** (`std::span<const std::byte>`),
+
+each by section name (defaults to **`.text`**).
 
 ---
 
@@ -17,10 +20,9 @@
 
 * **Hex byte**: two hex digits → one byte (`90`, `4F`, `00`, `ff`).
 * **Wildcard byte**: `?` or `??` matches **any byte**.
-* **Whitespace**: ignored (use to group tokens).
+* **Whitespace**: tokens are separated by spaces. See [`PatternScanner`](pattern_scan.md) for the exact rules (runtime string versus compile-time pattern).
 
-✔️ `"48 8B ?? ?? 89"`, `"55 8B EC"`, `"??"`
-❌ odd digit counts, non-hex characters (besides `?` and whitespace)
+Valid: `"48 8B ?? ?? 89"`, `"55 8B EC"`, `"??"`
 
 ---
 
@@ -29,10 +31,11 @@
 ```cpp
 namespace omath {
 
-struct PeSectionScanResult {
-  std::uint64_t virtual_base_addr;  // RVA base of the scanned section (ImageBase + SectionRVA)
-  std::uint64_t raw_base_addr;      // file offset (start of section in the file)
-  std::ptrdiff_t target_offset;     // offset from section base to the first matched byte
+// omath/utility/section_scan_result.hpp
+struct SectionScanResult {
+  std::uintptr_t virtual_base_addr;  // ImageBase + SectionRVA of the scanned section
+  std::uintptr_t raw_base_addr;      // file offset of the start of the section
+  std::ptrdiff_t target_offset;      // offset from section base to the first matched byte
 };
 
 class PePatternScanner final {
@@ -40,20 +43,44 @@ public:
   // Scan a module already loaded in *this* process.
   // module_base_address: HMODULE / ImageBase (e.g., from GetModuleHandle)
   // Returns absolute address (process VA) of the first match, or nullopt.
-  static std::optional<std::uintptr_t>
+  [[nodiscard]] static std::optional<std::uintptr_t>
   scan_for_pattern_in_loaded_module(const void* module_base_address,
-                                    const std::string_view& pattern);
+                                    const std::string_view& pattern,
+                                    const std::string_view& target_section_name = ".text");
 
   // Scan a PE file on disk, by section name (default ".text").
-  // Returns section bases (virtual + raw) and match offset within the section, or nullopt.
-  static std::optional<PeSectionScanResult>
+  [[nodiscard]] static std::optional<SectionScanResult>
   scan_for_pattern_in_file(const std::filesystem::path& path_to_file,
                            const std::string_view& pattern,
                            const std::string_view& target_section_name = ".text");
+
+  // Scan a PE file that is already in memory (raw file layout, not a mapped image).
+  [[nodiscard]] static std::optional<SectionScanResult>
+  scan_for_pattern_in_memory_file(std::span<const std::byte> file_data,
+                                  const std::string_view& pattern,
+                                  const std::string_view& target_section_name = ".text");
+
+  // Compile-time pattern variants of all three (pattern given as a template argument)
+  template<PatternScanner::ConstevalPattern Pattern>
+  [[nodiscard]] static std::optional<std::uintptr_t>
+  scan_for_pattern_in_loaded_module(const void* module_base_address,
+                                    const std::string_view& target_section_name = ".text");
+
+  template<PatternScanner::ConstevalPattern Pattern>
+  [[nodiscard]] static std::optional<SectionScanResult>
+  scan_for_pattern_in_file(const std::filesystem::path& path_to_file,
+                           const std::string_view& target_section_name = ".text");
+
+  template<PatternScanner::ConstevalPattern Pattern>
+  [[nodiscard]] static std::optional<SectionScanResult>
+  scan_for_pattern_in_memory_file(std::span<const std::byte> file_data,
+                                  const std::string_view& target_section_name = ".text");
 };
 
 } // namespace omath
 ```
+
+The `SectionScanResult` type is shared with the ELF and Mach-O scanners; see [SectionScanResult](section_scan_result.md).
 
 ---
 
@@ -61,17 +88,17 @@ public:
 
 * **Loaded module**: `std::optional<std::uintptr_t>`
 
-    * `value()` = **process virtual address** (ImageBase + SectionRVA + match offset).
+    * `value()` = **process virtual address** of the first match (the section's address in memory plus the match offset). Every section whose name equals `target_section_name` (and has raw data) is scanned in header order.
     * `nullopt` = no match or parse/PE error.
 
-* **File scan**: `std::optional<PeSectionScanResult>`
+* **File / memory-file scan**: `std::optional<SectionScanResult>`
 
-    * `virtual_base_addr` = **ImageBase + SectionRVA** of the scanned section (as if mapped).
+    * `virtual_base_addr` = **ImageBase + SectionRVA** of the scanned section (its address if mapped at the preferred base).
     * `raw_base_addr` = **file offset** of section start.
     * `target_offset` = offset from the section base to the **first matched byte**.
     * To get addresses:
 
-        * **Virtual (RVA)** of hit = `virtual_base_addr + target_offset`
+        * **Virtual address (at the preferred ImageBase)** of hit = `virtual_base_addr + target_offset`
         * **Raw file offset** of hit = `raw_base_addr + target_offset`
 
 ---
@@ -82,7 +109,7 @@ public:
 
 ```cpp
 #include <windows.h>
-#include "pe_pattern_scanner.hpp"
+#include <omath/utility/pe_pattern_scan.hpp>
 
 using omath::PePatternScanner;
 
@@ -102,16 +129,16 @@ if (hMod) {
 ### Scan a PE file on disk (default section “.text”)
 
 ```cpp
-#include "pe_pattern_scanner.hpp"
+#include <omath/utility/pe_pattern_scan.hpp>
 using omath::PePatternScanner;
 
 auto res = PePatternScanner::scan_for_pattern_in_file(
     R"(C:\Windows\System32\kernel32.dll)", "55 8B EC"
 );
 if (res) {
-  auto rva_hit  = res->virtual_base_addr + res->target_offset;
+  auto va_hit   = res->virtual_base_addr + res->target_offset;
   auto raw_hit  = res->raw_base_addr     + res->target_offset;
-  // rva_hit: where it would be in memory; raw_hit: file offset
+  // va_hit: where it would be in memory at the preferred base; raw_hit: file offset
 }
 ```
 
@@ -123,15 +150,23 @@ auto res = PePatternScanner::scan_for_pattern_in_file(
 );
 ```
 
+### Compile-time pattern, file already in memory
+
+```cpp
+std::vector<std::byte> file_bytes = /* read the whole PE file */;
+
+auto res = PePatternScanner::scan_for_pattern_in_memory_file<"48 8D 0D ?? ?? ?? ??">(file_bytes, ".rdata");
+```
+
 ---
 
 ## Notes & edge cases
 
-* **PE only**: these functions assume a valid **PE/COFF** layout. Non-PE files or corrupted headers yield `nullopt`.
+* **PE only**: these functions assume a valid **PE/COFF** layout. Non-PE files or corrupted headers yield `nullopt`. The memory-file variant additionally returns `nullopt` if a header or section lies outside the supplied span.
 * **Section name**: `scan_for_pattern_in_file` defaults to **`.text`**; pass a different name to target other sections.
-* **Alignment & RVAs**: `virtual_base_addr` is computed from section headers (RVA aligned per section alignment). The returned “virtual” base is suitable for RVA math; the **process VA** returned by the “loaded module” API already includes the image base.
+* **Addresses**: `virtual_base_addr` is `ImageBase` (from the optional header) plus the section's RVA, so it is a VA at the preferred base, not a bare RVA. The **process VA** returned by the “loaded module” API reflects where the module is actually mapped.
 * **Architecture**: works for 32-bit and 64-bit PEs; `std::uintptr_t` size matches the build architecture.
-* **Performance**: Pattern matching is **O(N × M)** (sliding window with wildcards). For large images, prefer scanning only necessary sections.
+* **Performance**: Matching is done by [`PatternScanner`](pattern_scan.md) (worst case **O(N × M)**, close to O(N) in practice with SIMD pre-filtering). File and memory-file scans copy the target section into a temporary buffer first. For large images, prefer scanning only necessary sections.
 * **Wildcards**: Each `?` matches **one byte** (no nibble masks). If you need `A?`-style nibble wildcards, extend the parser (see `PatternScanner`).
 * **Safety**: For loaded modules, you must have access to the memory; scanning read-only sections is fine, but never write. For file scans, ensure the file path is accessible.
 
@@ -147,8 +182,8 @@ auto res = PePatternScanner::scan_for_pattern_in_file(
 
 ## See also
 
-* `omath::PatternScanner` — raw buffer/iterator scanning with the same pattern grammar.
-* `omath::Triangle`, `omath::Vector3` — math types used elsewhere in the library.
+* [`omath::PatternScanner`](pattern_scan.md) — raw buffer/iterator scanning with the same pattern grammar.
+* [`omath::SectionScanResult`](section_scan_result.md) — result type shared with the ELF and Mach-O scanners.
 
 ---
 

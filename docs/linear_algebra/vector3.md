@@ -1,19 +1,19 @@
 # `omath::Vector3` — 3D vector (C++20/23)
 
-> Header: your project’s `vector3.hpp`
+> Header: `omath/linear_algebra/vector3.hpp`
 > Namespace: `omath`
 > Template: `template<class Type> requires std::is_arithmetic_v<Type>`
 > Depends on: `omath::Vector2<Type>` (base class), `omath::Angle` (for `angle_between`)
 > C++: uses `std::expected` ⇒ **C++23** recommended (or a backport)
 
-`Vector3<Type>` extends `Vector2<Type>` with a `z` component and 3D operations: arithmetic, geometry (dot, cross, distance), normalization, angle-between with robust error signaling, hashing (for `float`) and `std::formatter` support.
+`Vector3<Type>` extends `Vector2<Type>` with a `z` component and 3D operations: arithmetic, geometry (dot, cross, distance), normalization, angle-between with robust error signaling, hashing (generic `std::hash` specialization) and `std::formatter` support.
 
 ---
 
 ## Quick start
 
 ```cpp
-#include "vector3.hpp"
+#include <omath/linear_algebra/vector3.hpp>
 using omath::Vector3;
 
 using Vec3f = Vector3<float>;
@@ -51,7 +51,13 @@ Type z{0};
 ```cpp
 constexpr Vector3() noexcept;
 constexpr Vector3(const Type& x, const Type& y, const Type& z) noexcept;
+
+// explicit cast to another arithmetic component type
+template<class CastedType> requires std::is_arithmetic_v<CastedType>
+constexpr explicit operator Vector3<CastedType>() const noexcept;
 ```
+
+`using ContainedType = Type;` is also declared.
 
 ---
 
@@ -61,13 +67,13 @@ constexpr Vector3(const Type& x, const Type& y, const Type& z) noexcept;
 constexpr bool operator==(const Vector3&) const noexcept; // component-wise
 constexpr bool operator!=(const Vector3&) const noexcept;
 
-bool operator< (const Vector3&) const noexcept; // compare by length()
-bool operator> (const Vector3&) const noexcept;
-bool operator<=(const Vector3&) const noexcept;
-bool operator>=(const Vector3&) const noexcept;
+constexpr bool operator< (const Vector3&) const noexcept; // compare by length_sqr()
+constexpr bool operator> (const Vector3&) const noexcept;
+constexpr bool operator<=(const Vector3&) const noexcept;
+constexpr bool operator>=(const Vector3&) const noexcept;
 ```
 
-> **Note:** Ordering uses **magnitude**, not lexicographic order.
+> **Note:** Ordering uses **magnitude** (squared length), not lexicographic order.
 
 ---
 
@@ -76,19 +82,19 @@ bool operator>=(const Vector3&) const noexcept;
 Component-wise with another vector:
 
 ```cpp
-Vector3& operator+=(const Vector3&) noexcept;
-Vector3& operator-=(const Vector3&) noexcept;
-Vector3& operator*=(const Vector3&) noexcept;  // Hadamard product
-Vector3& operator/=(const Vector3&) noexcept;
+constexpr Vector3& operator+=(const Vector3&) noexcept;
+constexpr Vector3& operator-=(const Vector3&) noexcept;
+constexpr Vector3& operator*=(const Vector3&) noexcept;  // Hadamard product
+constexpr Vector3& operator/=(const Vector3&) noexcept;
 ```
 
 With a scalar:
 
 ```cpp
-Vector3& operator*=(const Type& v) noexcept;
-Vector3& operator/=(const Type& v) noexcept;
-Vector3& operator+=(const Type& v) noexcept;
-Vector3& operator-=(const Type& v) noexcept;
+constexpr Vector3& operator*=(const Type& v) noexcept;
+constexpr Vector3& operator/=(const Type& v) noexcept;
+constexpr Vector3& operator+=(const Type& v) noexcept;
+constexpr Vector3& operator-=(const Type& v) noexcept;
 ```
 
 ---
@@ -110,31 +116,28 @@ constexpr Vector3 operator/(const Type& scalar)   const noexcept;
 ## Geometry & helpers
 
 ```cpp
-// Distances & lengths
-Type        distance_to(const Vector3&) const;          // sqrt of squared distance
-constexpr Type distance_to_sqr(const Vector3&) const noexcept;
-#ifndef _MSC_VER
-constexpr Type length()     const;                       // hypot(x,y,z)
-constexpr Type length_2d()  const;                       // 2D length from base
-constexpr Vector3 normalized() const;                    // returns *this if length==0
-#else
-Type        length()     const noexcept;
-Type        length_2d()  const noexcept;
-Vector3     normalized() const noexcept;
-#endif
-constexpr Type length_sqr() const noexcept;
+// Distances & lengths (floating-point Type only for the first four)
+constexpr Type    distance_to(const Vector3&) const noexcept;  // length of (*this - other)
+constexpr Type    length()     const noexcept;                 // hypot(x,y,z)
+constexpr Type    length_2d()  const noexcept;                 // 2D length from base
+constexpr Vector3 normalized() const noexcept;                 // returns *this if length==0
+constexpr Type    distance_to_sqr(const Vector3&) const noexcept;
+constexpr Type    length_sqr() const noexcept;
 
 // Products
-constexpr Type   dot(const Vector3&)   const noexcept;
+constexpr Type    dot(const Vector3&)   const noexcept;
 constexpr Vector3 cross(const Vector3&) const noexcept;  // right-handed
 
-// Sums & tuples
+// Sums, tuples & arrays
 constexpr Type sum()      const noexcept;  // x + y + z
 constexpr Type sum_2d()   const noexcept;  // x + y
-constexpr auto as_tuple() const noexcept -> std::tuple<Type,Type,Type>;
+constexpr std::tuple<Type,Type,Type> as_tuple() const noexcept;
+constexpr std::array<Type, 3>        as_array() const noexcept;
 
 // Utilities
-Vector3& abs() noexcept; // component-wise absolute
+constexpr Vector3& abs() noexcept;        // in-place component-wise absolute
+constexpr Vector3  abs() const noexcept;  // non-mutating overload
+constexpr bool point_to_same_direction(const Vector3&) const;  // dot(other) > 0
 ```
 
 ---
@@ -145,23 +148,29 @@ Vector3& abs() noexcept; // component-wise absolute
 enum class Vector3Error { IMPOSSIBLE_BETWEEN_ANGLE };
 
 // Angle in degrees, clamped to [0,180]. Error if any vector has zero length.
-std::expected<
-  omath::Angle<float, 0.f, 180.f, AngleFlags::Clamped>,
+// Floating-point Type only.
+template<class SelfType = Type>
+constexpr std::expected<
+  omath::Angle<SelfType, SelfType{0}, SelfType{180}, AngleFlags::Clamped>,
   Vector3Error
 > angle_between(const Vector3& other) const noexcept;
 
-bool is_perpendicular(const Vector3& other) const noexcept; // true if angle == 90°
+// true if the angle is within `epsilon` degrees of 90; false for zero-length vectors.
+// Floating-point Type only.
+constexpr bool is_perpendicular(const Vector3& other,
+                                Type epsilon = static_cast<Type>(0.0001)) const noexcept;
 ```
 
 ---
 
 ## Hashing & formatting
 
-* **Hash (for `Vector3<float>`)**
+* **Hash (any `Type`)**
 
   ```cpp
-  template<> struct std::hash<omath::Vector3<float>> {
-    std::size_t operator()(const omath::Vector3<float>&) const noexcept;
+  template<class Type>
+  struct std::hash<omath::Vector3<Type>> {
+    std::size_t operator()(const omath::Vector3<Type>&) const noexcept;
   };
   ```
 
@@ -223,27 +232,28 @@ auto s = a * 2.f; // (4, 6, 8)    scalar
 ## API summary (signatures)
 
 ```cpp
-// Ctors
+// Ctors / cast
 constexpr Vector3() noexcept;
 constexpr Vector3(const Type& x, const Type& y, const Type& z) noexcept;
+template<class CastedType> constexpr explicit operator Vector3<CastedType>() const noexcept;
 
-// Equality & ordering
+// Equality & ordering (ordering by length_sqr())
 constexpr bool operator==(const Vector3&) const noexcept;
 constexpr bool operator!=(const Vector3&) const noexcept;
-bool operator< (const Vector3&) const noexcept;
-bool operator> (const Vector3&) const noexcept;
-bool operator<=(const Vector3&) const noexcept;
-bool operator>=(const Vector3&) const noexcept;
+constexpr bool operator< (const Vector3&) const noexcept;
+constexpr bool operator> (const Vector3&) const noexcept;
+constexpr bool operator<=(const Vector3&) const noexcept;
+constexpr bool operator>=(const Vector3&) const noexcept;
 
 // Mutating arithmetic
-Vector3& operator+=(const Vector3&) noexcept;
-Vector3& operator-=(const Vector3&) noexcept;
-Vector3& operator*=(const Vector3&) noexcept;
-Vector3& operator/=(const Vector3&) noexcept;
-Vector3& operator*=(const Type&)   noexcept;
-Vector3& operator/=(const Type&)   noexcept;
-Vector3& operator+=(const Type&)   noexcept;
-Vector3& operator-=(const Type&)   noexcept;
+constexpr Vector3& operator+=(const Vector3&) noexcept;
+constexpr Vector3& operator-=(const Vector3&) noexcept;
+constexpr Vector3& operator*=(const Vector3&) noexcept;
+constexpr Vector3& operator/=(const Vector3&) noexcept;
+constexpr Vector3& operator*=(const Type&)   noexcept;
+constexpr Vector3& operator/=(const Type&)   noexcept;
+constexpr Vector3& operator+=(const Type&)   noexcept;
+constexpr Vector3& operator-=(const Type&)   noexcept;
 
 // Non-mutating arithmetic
 constexpr Vector3 operator-() const noexcept;
@@ -255,32 +265,30 @@ constexpr Vector3 operator*(const Type&)   const noexcept;
 constexpr Vector3 operator/(const Type&)   const noexcept;
 
 // Geometry
-Type        distance_to(const Vector3&) const;
-constexpr Type distance_to_sqr(const Vector3&) const noexcept;
-#ifndef _MSC_VER
-constexpr Type   length() const;
-constexpr Type   length_2d() const;
-constexpr Vector3 normalized() const;
-#else
-Type        length() const noexcept;
-Type        length_2d() const noexcept;
-Vector3     normalized() const noexcept;
-#endif
-constexpr Type length_sqr() const noexcept;
-constexpr Type dot(const Vector3&) const noexcept;
+constexpr Type    distance_to(const Vector3&) const noexcept;   // floating-point only
+constexpr Type    distance_to_sqr(const Vector3&) const noexcept;
+constexpr Type    length() const noexcept;                      // floating-point only
+constexpr Type    length_2d() const noexcept;                   // floating-point only
+constexpr Vector3 normalized() const noexcept;                  // floating-point only
+constexpr Type    length_sqr() const noexcept;
+constexpr Type    dot(const Vector3&) const noexcept;
 constexpr Vector3 cross(const Vector3&) const noexcept;
 
-Vector3&    abs() noexcept;
+constexpr Vector3& abs() noexcept;
+constexpr Vector3  abs() const noexcept;
 constexpr Type sum()    const noexcept;
 constexpr Type sum_2d() const noexcept;
-constexpr auto as_tuple() const noexcept -> std::tuple<Type,Type,Type>;
+constexpr std::tuple<Type,Type,Type> as_tuple() const noexcept;
+constexpr std::array<Type,3>         as_array() const noexcept;
+constexpr bool point_to_same_direction(const Vector3&) const;
 
-// Angles
-std::expected<omath::Angle<float,0.f,180.f,AngleFlags::Clamped>, omath::Vector3Error>
+// Angles (floating-point only)
+template<class SelfType = Type>
+constexpr std::expected<omath::Angle<SelfType, SelfType{0}, SelfType{180}, AngleFlags::Clamped>, omath::Vector3Error>
 angle_between(const Vector3&) const noexcept;
-bool is_perpendicular(const Vector3&) const noexcept;
+constexpr bool is_perpendicular(const Vector3&, Type epsilon = static_cast<Type>(0.0001)) const noexcept;
 
-// Hash (float) and formatter specializations provided below the class
+// std::hash<Vector3<Type>> and std::formatter<Vector3<Type>> specializations are provided below the class
 ```
 
 ---
@@ -290,7 +298,7 @@ bool is_perpendicular(const Vector3&) const noexcept;
 * Inherits all public API of `Vector2<Type>` (including `x`, `y`, many operators, and helpers used internally).
 * `normalized()` returns the original vector if its length is zero (no NaNs).
 * `cross()` uses the standard right-handed definition.
-* `length()`/`normalized()` are `constexpr` on non-MSVC; MSVC builds provide `noexcept` runtime versions.
+* `length()`, `length_2d()`, `normalized()`, `distance_to()`, `angle_between()` and `is_perpendicular()` require a floating-point `Type`.
 
 ---
 

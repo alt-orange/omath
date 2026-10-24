@@ -14,18 +14,21 @@ These error codes are returned by camera/projection helpers (e.g., `Camera::worl
 enum class Error : uint16_t {
   WORLD_POSITION_IS_OUT_OF_SCREEN_BOUNDS,
   INV_VIEW_PROJ_MAT_DET_EQ_ZERO,
+  PERSPECTIVE_DIVIDER_LESS_EQ_ZERO,
 };
 ```
 
 * **`WORLD_POSITION_IS_OUT_OF_SCREEN_BOUNDS`**
   The input point cannot produce a valid on-screen coordinate:
 
-    * Clip-space `w == 0` (point at/infinite or behind camera plane), or
-    * After projection, any NDC component is outside `[-1, 1]`.
+    * After projection, the NDC x/y is outside `[-1, 1]` or the NDC z is outside the engine's depth range (`[-1, 1]` or `[0, 1]`). The `*_unclipped` variants (`ViewPortClipping::MANUAL`) check only z.
 
 * **`INV_VIEW_PROJ_MAT_DET_EQ_ZERO`**
   The **View × Projection** matrix is not invertible (determinant ≈ 0).
-  Unprojection (`screen_to_world` / `view_port_to_screen`) requires an invertible matrix.
+  Unprojection (`view_port_to_world` / `screen_to_world`) requires an invertible matrix.
+
+* **`PERSPECTIVE_DIVIDER_LESS_EQ_ZERO`**
+  The homogeneous `w` is unusable. When projecting, `w <= epsilon` means the point is at or behind the camera plane; when unprojecting, `|w| < epsilon` after multiplying by the inverse view-projection matrix.
 
 ---
 
@@ -42,6 +45,9 @@ if (!pix) {
       break;
     case Error::INV_VIEW_PROJ_MAT_DET_EQ_ZERO:
       // Investigate camera/projection setup; near/far/FOV or trait bug.
+      break;
+    case Error::PERSPECTIVE_DIVIDER_LESS_EQ_ZERO:
+      // Point is at/behind the camera plane (or degenerate unprojection).
       break;
   }
 }
@@ -61,8 +67,11 @@ if (auto world = cam.screen_to_world({sx, sy, 1.0f})) {
 * **Out-of-bounds**
 
     * The world point lies outside the camera frustum.
-    * The point is behind the camera (clip `w <= 0`).
     * Extremely large coordinates cause overflow and fail NDC bounds.
+
+* **Non-positive perspective divider**
+
+    * The point is behind the camera (clip `w <= 0`) or exactly on the camera plane.
 
 * **Non-invertible VP**
 
@@ -75,5 +84,5 @@ if (auto world = cam.screen_to_world({sx, sy, 1.0f})) {
 ## Recommendations
 
 * Validate camera setup: `near > 0`, `far > near`, sensible FOV (e.g., 30°–120°).
-* For UI markers: treat `WORLD_POSITION_IS_OUT_OF_SCREEN_BOUNDS` as a simple **cull** signal.
+* For UI markers: treat `WORLD_POSITION_IS_OUT_OF_SCREEN_BOUNDS` and `PERSPECTIVE_DIVIDER_LESS_EQ_ZERO` as simple **cull** signals.
 * Log `INV_VIEW_PROJ_MAT_DET_EQ_ZERO` — it usually indicates a configuration or math bug worth fixing rather than hiding.

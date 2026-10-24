@@ -102,9 +102,18 @@ Unity uses a left-handed coordinate system with Y-up:
 
 ```cpp
 namespace omath::unity_engine {
+    // mesh.hpp
     using Mesh = primitives::Mesh<Mat4X4, ViewAngles, MeshTrait, float>;
+
+    // primitives.hpp
+    using BoxMesh   = primitives::Mesh<Mat4X4, ViewAngles, MeshTrait, primitives::Vertex<>,
+                                       std::array<Vector3<float>, 8>, std::array<Vector3<std::uint32_t>, 12>>;
+    using PlaneMesh = primitives::Mesh<Mat4X4, ViewAngles, MeshTrait, primitives::Vertex<>,
+                                       std::array<Vector3<float>, 4>, std::array<Vector3<std::uint32_t>, 2>>;
 }
 ```
+
+`BoxMesh` (8 vertices, 12 triangles) and `PlaneMesh` (4 vertices, 2 triangles) are fixed-size meshes declared in `primitives.hpp`. Unity Engine has no `collider.hpp`, so there is no ready-made `MeshCollider` alias; wrap a mesh with `collision::MeshCollider<Mesh>` yourself if needed.
 
 ---
 

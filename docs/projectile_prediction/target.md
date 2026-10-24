@@ -2,7 +2,8 @@
 
 > Header: `omath/projectile_prediction/target.hpp`
 > Namespace: `omath::projectile_prediction`
-> Used by: `ProjPredEngineInterface` implementations (e.g., Legacy/AVX2 engines)
+> Template: `Target<ArithmeticType = float>`
+> Used by: `ProjPredEngineInterface` implementations (Legacy, AVX2, Drag engines)
 
 A small POD-style container describing a target’s **current pose** and **motion** for projectile lead/aim computations.
 
@@ -13,11 +14,12 @@ A small POD-style container describing a target’s **current pose** and **motio
 ```cpp
 namespace omath::projectile_prediction {
 
+template<class ArithmeticType = float>
 class Target final {
 public:
-  Vector3<float> m_origin;    // Current world-space position of the target
-  Vector3<float> m_velocity;  // World-space linear velocity (units/sec)
-  bool           m_is_airborne{}; // Domain hint (e.g., ignore ground snapping)
+  Vector3<ArithmeticType> m_origin;    // Current world-space position of the target
+  Vector3<ArithmeticType> m_velocity;  // World-space linear velocity (units/sec)
+  bool                    m_is_airborne{}; // Domain hint (e.g., apply gravity to the target)
 };
 
 } // namespace omath::projectile_prediction
@@ -27,7 +29,7 @@ public:
 
 ## Field semantics
 
-* **`m_origin`** — target position in world coordinates (same units as your `Vector3<float>` grid).
+* **`m_origin`** — target position in world coordinates (same units as your `Vector3<ArithmeticType>` grid).
 * **`m_velocity`** — instantaneous linear velocity. Solvers commonly assume **constant velocity** between “now” and impact unless your trait injects gravity/accel.
 * **`m_is_airborne`** — optional hint for engine/trait logic (e.g., apply gravity to the target, skip ground friction/snap). Exact meaning is engine-dependent.
 
@@ -40,13 +42,13 @@ public:
 ```cpp
 using namespace omath::projectile_prediction;
 
-Target tgt;
+Target<float> tgt;
 tgt.m_origin    = { 42.0f, 1.8f, -7.5f };
 tgt.m_velocity  = {  3.0f, 0.0f,  0.0f }; // moving +X at 3 units/s
 tgt.m_is_airborne = false;
 
-// Feed into an aim solver with a Projectile
-auto aim = engine->maybe_calculate_aim_point(projectile, tgt);
+// Feed into an aim solver with a Projectile and a Launcher
+auto aim = engine->maybe_calculate_aim(projectile, launcher, tgt);
 ```
 
 ---
@@ -55,14 +57,15 @@ auto aim = engine->maybe_calculate_aim_point(projectile, tgt);
 
 * If you track acceleration (e.g., gravity on ragdolls), your **EngineTrait** may derive it from `m_is_airborne` and world gravity; otherwise most solvers treat the target’s motion as linear.
 * For highly agile targets, refresh `m_origin`/`m_velocity` every tick and re-solve; don’t reuse stale aim points.
-* Precision: `Vector3<float>` is typically enough; if you need sub-millimeter accuracy over long ranges, consider double-precision internally in your trait.
+* Precision: `Target<float>` is typically enough; if you need sub-millimeter accuracy over long ranges, use `Target<double>` with an engine instantiated for `double`.
 
 ---
 
 ## See also
 
-* `Projectile` — shooter origin, muzzle speed, gravity scale
-* `ProjPredEngineInterface` — common interface for aim solvers
+* [`Projectile`](projectile.md) — muzzle speed, gravity scale, drag
+* [`Launcher`](launcher.md) — eye origin and muzzle offset
+* [`ProjPredEngineInterface`](projectile_engine.md) — common interface for aim solvers
 * `ProjPredEngineLegacy`, `ProjPredEngineAvx2`, `ProjPredEngineDrag` — concrete solvers using this data
 
 ---

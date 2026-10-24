@@ -1,7 +1,212 @@
-site_name: OMATH Docs
+site_name: OMath
+site_description: Modern constexpr C++23 math, physics and game-tooling library
+site_url: http://libomath.org/
+repo_url: https://git.libomath.org/orange/omath
+repo_name: orange/omath
+
 theme:
-  name: darkly
+  name: material
+  logo: images/logos/omath_logo_nano.png
+  favicon: images/logos/omath_logo_nano.png
+  font:
+    text: Inter
+    code: JetBrains Mono
+  palette:
+    - media: "(prefers-color-scheme: dark)"
+      scheme: slate
+      primary: custom
+      accent: deep orange
+      toggle:
+        icon: material/weather-night
+        name: Switch to light mode
+    - media: "(prefers-color-scheme: light)"
+      scheme: default
+      primary: custom
+      accent: deep orange
+      toggle:
+        icon: material/weather-sunny
+        name: Switch to dark mode
+  icon:
+    repo: fontawesome/brands/git-alt
+  features:
+    - navigation.instant
+    - navigation.tracking
+    - navigation.tabs
+    - navigation.sections
+    - navigation.top
+    - navigation.footer
+    - search.suggest
+    - search.highlight
+    - toc.follow
+    - content.code.copy
+    - content.tabs.link
+
 extra_css:
-  - styles/center.css
-  - styles/custom-header.css
-  - styles/links.css
+  - styles/theme.css
+
+markdown_extensions:
+  - admonition
+  - attr_list
+  - md_in_html
+  - tables
+  - toc:
+      permalink: true
+  - pymdownx.details
+  - pymdownx.highlight:
+      anchor_linenums: true
+  - pymdownx.inlinehilite
+  - pymdownx.superfences
+  - pymdownx.tabbed:
+      alternate_style: true
+  - pymdownx.tilde
+  - pymdownx.emoji:
+      emoji_index: !!python/name:material.extensions.emoji.twemoji
+      emoji_generator: !!python/name:material.extensions.emoji.to_svg
+
+extra:
+  social:
+    - icon: fontawesome/brands/discord
+      link: https://discord.gg/eDgdaWbqwZ
+    - icon: fontawesome/brands/telegram
+      link: https://t.me/orangennotes
+    - icon: fontawesome/brands/git-alt
+      link: https://git.libomath.org/orange/omath
+
+nav:
+  - Home: index.md
+  - Guide:
+      - Getting started: getting_started.md
+      - Install: install.md
+      - Tutorials: tutorials.md
+      - API overview: api_overview.md
+      - Best practices: best_practices.md
+      - FAQ: faq.md
+      - Troubleshooting: troubleshooting.md
+  - Math:
+      - Linear algebra:
+          - Vector2: linear_algebra/vector2.md
+          - Vector3: linear_algebra/vector3.md
+          - Vector4: linear_algebra/vector4.md
+          - Mat4X4: linear_algebra/mat.md
+          - Quaternion: linear_algebra/quaternion.md
+          - Triangle: linear_algebra/triangle.md
+      - Trigonometry:
+          - Angle: trigonometry/angle.md
+          - Angles: trigonometry/angles.md
+          - View angles: trigonometry/view_angles.md
+      - 3D primitives:
+          - Box: 3d_primitives/box.md
+          - AABB: 3d_primitives/aabb.md
+          - OBB: 3d_primitives/obb.md
+          - Plane: 3d_primitives/plane.md
+          - Mesh: 3d_primitives/mesh.md
+  - Gameplay:
+      - Projection:
+          - Camera: projection/camera.md
+          - Error codes: projection/error_codes.md
+      - Collision:
+          - Collider interface: collision/collider_interface.md
+          - Line tracer: collision/line_tracer.md
+          - Mesh collider: collision/mesh_collider.md
+          - GJK: collision/gjk_algorithm.md
+          - EPA: collision/epa_algorithm.md
+          - Simplex: collision/simplex.md
+      - Projectile prediction:
+          - Engine interface: projectile_prediction/projectile_engine.md
+          - Prediction engine: projectile_prediction/proj_pred_engine.md
+          - Pred engine concept: projectile_prediction/pred_engine_concept.md
+          - Projectile: projectile_prediction/projectile.md
+          - Target: projectile_prediction/target.md
+          - Launcher: projectile_prediction/launcher.md
+          - Legacy engine: projectile_prediction/proj_pred_engine_legacy.md
+          - AVX2 engine: projectile_prediction/proj_pred_engine_avx2.md
+          - Drag engine: projectile_prediction/proj_pred_engine_drag.md
+          - Projectile flight: projectile_prediction/projectile_flight.md
+      - Pathfinding:
+          - A*: pathfinding/a_star.md
+          - Navigation mesh: pathfinding/navigation_mesh.md
+          - Walk bot: pathfinding/walk_bot.md
+      - Algorithms:
+          - Radar: algorithm/radar.md
+          - Targeting: algorithm/targeting.md
+  - Engines:
+      - Source:
+          - Camera trait: engines/source_engine/camera_trait.md
+          - Pred engine trait: engines/source_engine/pred_engine_trait.md
+          - Mesh trait: engines/source_engine/mesh_trait.md
+          - Constants: engines/source_engine/constants.md
+          - Formulas: engines/source_engine/formulas.md
+      - Unity:
+          - Camera trait: engines/unity_engine/camera_trait.md
+          - Pred engine trait: engines/unity_engine/pred_engine_trait.md
+          - Mesh trait: engines/unity_engine/mesh_trait.md
+          - Constants: engines/unity_engine/constants.md
+          - Formulas: engines/unity_engine/formulas.md
+      - Unreal:
+          - Camera trait: engines/unreal_engine/camera_trait.md
+          - Pred engine trait: engines/unreal_engine/pred_engine_trait.md
+          - Mesh trait: engines/unreal_engine/mesh_trait.md
+          - Constants: engines/unreal_engine/constants.md
+          - Formulas: engines/unreal_engine/formulas.md
+          - Actor name: engines/unreal_engine/actor_name.md
+          - Object array: engines/unreal_engine/object_array.md
+      - Frostbite:
+          - Camera trait: engines/frostbite/camera_trait.md
+          - Pred engine trait: engines/frostbite/pred_engine_trait.md
+          - Mesh trait: engines/frostbite/mesh_trait.md
+          - Constants: engines/frostbite/constants.md
+          - Formulas: engines/frostbite/formulas.md
+      - IW Engine:
+          - Camera trait: engines/iw_engine/camera_trait.md
+          - Pred engine trait: engines/iw_engine/pred_engine_trait.md
+          - Mesh trait: engines/iw_engine/mesh_trait.md
+          - Constants: engines/iw_engine/constants.md
+          - Formulas: engines/iw_engine/formulas.md
+      - OpenGL:
+          - Camera trait: engines/opengl_engine/camera_trait.md
+          - Pred engine trait: engines/opengl_engine/pred_engine_trait.md
+          - Mesh trait: engines/opengl_engine/mesh_trait.md
+          - Constants: engines/opengl_engine/constants.md
+          - Formulas: engines/opengl_engine/formulas.md
+      - Serious Engine:
+          - Camera trait: engines/serious_engine/camera_trait.md
+          - Pred engine trait: engines/serious_engine/pred_engine_trait.md
+          - Mesh trait: engines/serious_engine/mesh_trait.md
+          - Constants: engines/serious_engine/constants.md
+          - Formulas: engines/serious_engine/formulas.md
+      - CryEngine:
+          - Camera trait: engines/cry_engine/camera_trait.md
+          - Pred engine trait: engines/cry_engine/pred_engine_trait.md
+          - Mesh trait: engines/cry_engine/mesh_trait.md
+          - Constants: engines/cry_engine/constants.md
+          - Formulas: engines/cry_engine/formulas.md
+      - RAGE:
+          - Camera trait: engines/rage_engine/camera_trait.md
+          - Pred engine trait: engines/rage_engine/pred_engine_trait.md
+          - Mesh trait: engines/rage_engine/mesh_trait.md
+          - Constants: engines/rage_engine/constants.md
+          - Formulas: engines/rage_engine/formulas.md
+  - Tooling:
+      - HUD & overlays:
+          - Overview: hud/overview.md
+          - Screen overlay: hud/screen_overlay.md
+          - Entity overlay: hud/entity_overlay.md
+          - Widgets: hud/widgets.md
+          - Renderer interface: hud/renderer_interface.md
+          - ImGui renderer: hud/imgui_renderer.md
+      - HooksManager: hooks/hooks_manager.md
+      - Lua scripting: lua/lua.md
+      - Reverse engineering:
+          - External object: rev_eng/external_rev_object.md
+          - Internal object: rev_eng/internal_rev_object.md
+          - Memory trait: rev_eng/memory_trait.md
+      - Pattern scanning:
+          - Pattern scan: utility/pattern_scan.md
+          - PE scan: utility/pe_pattern_scan.md
+          - ELF scan: utility/elf_pattern_scan.md
+          - Mach-O scan: utility/macho_pattern_scan.md
+          - Scan result: utility/section_scan_result.md
+      - Utilities:
+          - Color: utility/color.md
+          - Hashing: utility/hashing.md
+          - Encrypted variable: containers/encrypted_variable.md

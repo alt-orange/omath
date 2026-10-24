@@ -32,6 +32,7 @@ requires std::is_floating_point_v<Type>
 class Angle {
 public:
   // Construction
+  using ArithmeticType = Type;
   static constexpr Angle from_degrees(const Type& deg) noexcept;
   static constexpr Angle from_radians(const Type& rad) noexcept;
   static constexpr Angle from_asin(const Type& value) noexcept;
@@ -46,16 +47,16 @@ public:
   constexpr Type        as_radians()  const noexcept;
 
   // Trig (computed from radians)
-  Type sin() const noexcept;
-  Type cos() const noexcept;
-  Type tan() const noexcept;
-  Type cot() const noexcept;   // cos()/sin()  (watch sin≈0)
+  constexpr Type sin() const noexcept;
+  constexpr Type cos() const noexcept;
+  constexpr Type tan() const noexcept;
+  constexpr Type cot() const noexcept;   // cos()/sin()  (watch sin≈0)
 
   // Arithmetic (wraps or clamps per flags and configured range)
   constexpr Angle& operator+=(const Angle&) noexcept;
   constexpr Angle& operator-=(const Angle&) noexcept;
-  constexpr Angle  operator+(const Angle&) noexcept;
-  constexpr Angle  operator-(const Angle&) noexcept;
+  constexpr Angle  operator+(const Angle&) const noexcept;
+  constexpr Angle  operator-(const Angle&) const noexcept;
   constexpr Angle  operator-()        const noexcept;
 
   // Comparison (partial ordering)

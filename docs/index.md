@@ -1,250 +1,214 @@
-<div class="center-text">
-<!-- Banner -->
-<p>
-  <img src="images/logos/omath_logo_macro.png" alt="omath banner">
-</p>
-
-<!-- Badges -->
-<p>
-  <img src="https://img.shields.io/badge/license-libomath-orange" alt="license: libomath">
-  <img src="https://img.shields.io/github/contributors/orange-cpp/omath" alt="GitHub contributors">
-  <img src="https://img.shields.io/github/languages/top/orange-cpp/omath" alt="Top language">
-  <a href="https://www.codefactor.io/repository/github/orange-cpp/omath">
-    <img src="https://www.codefactor.io/repository/github/orange-cpp/omath/badge" alt="CodeFactor">
-  </a>
-  <img src="https://img.shields.io/github/actions/workflow/status/orange-cpp/omath/cmake-multi-platform.yml" alt="GitHub Actions Workflow Status">
-  <a href="https://repology.org/project/orange-math/versions">
-    <img src="https://repology.org/badge/version-for-repo/vcpkg/orange-math.svg" alt="Vcpkg package">
-  </a>
-  <img src="https://img.shields.io/github/forks/orange-cpp/omath" alt="GitHub forks">
-  <a href="https://discord.gg/eDgdaWbqwZ">
-    <img src="https://dcbadge.limes.pink/api/server/https://discord.gg/eDgdaWbqwZ?style=flat" alt="Join us on Discord">
-  </a>
-  <a href="https://t.me/orangennotes">
-    <img src="https://img.shields.io/badge/Telegram-2CA5E0?style=flat-squeare&logo=telegram&logoColor=white" alt="Telegram">
-  </a>
-</p>
-</div>
-
-OMath is a 100% independent, constexpr template blazingly fast math library that doesn't have legacy C++ code.
-
-It provides the latest features, is highly customizable, has all for cheat development, DirectX/OpenGL/Vulkan support, premade support for different game engines, much more constexpr stuff than in other libraries and more...
-
+---
+title: OMath
+hide:
+  - navigation
+  - toc
 ---
 
-## 🚀 Quick Start
+<div class="hero" markdown>
 
-**New to OMath?** Start here:
+<img class="hero-logo" src="images/logos/omath_logo_macro.png" alt="OMath logo">
 
-- **[Getting Started Guide](getting_started.md)** - Installation and first steps
-- **[API Overview](api_overview.md)** - High-level API reference
-- **[Installation Instructions](install.md)** - Detailed setup guide
+# OMath { .hero-title }
 
-**Quick example:**
+<p class="hero-tagline">
+A 100% independent, <code>constexpr</code>, template-based math, physics and game-tooling framework for modern C++23 — no legacy code, no dependencies.
+</p>
+
+[Get started](getting_started.md){ .md-button .md-button--primary }
+[Install](install.md){ .md-button }
+[API overview](api_overview.md){ .md-button }
+
+<p>
+  <a href="https://git.libomath.org/orange/omath/src/branch/main/LICENSE"><img src="https://img.shields.io/github/license/alt-orange/omath" alt="License"></a>
+  <img src="https://img.shields.io/gitea/v/release/orange/omath?gitea_url=https://git.libomath.org&sort=semver" alt="Release">
+  <img src="https://img.shields.io/gitea/last-commit/orange/omath?gitea_url=https://git.libomath.org" alt="Last commit">
+  <img src="https://img.shields.io/github/actions/workflow/status/alt-orange/omath/cmake-multi-platform.yml" alt="Build status">
+  <a href="https://repology.org/project/orange-math/versions"><img src="https://repology.org/badge/version-for-repo/vcpkg/orange-math.svg" alt="Vcpkg package"></a>
+  <img src="https://img.shields.io/conan/v/omath" alt="Conan Center">
+  <a href="https://discord.gg/eDgdaWbqwZ"><img src="https://dcbadge.limes.pink/api/server/https://discord.gg/eDgdaWbqwZ?style=flat" alt="Join us on Discord"></a>
+  <a href="https://t.me/orangennotes"><img src="https://img.shields.io/badge/Telegram-2CA5E0?style=flat-square&logo=telegram&logoColor=white" alt="Telegram"></a>
+</p>
+
+</div>
+
+## Quick example
 
 ```cpp
 #include <omath/omath.hpp>
 
-using namespace omath;
+using omath::Vector3;
 
 Vector3<float> a{1, 2, 3};
 Vector3<float> b{4, 5, 6};
 
-auto dot = a.dot(b);              // 32.0
-auto cross = a.cross(b);          // (-3, 6, -3)
-auto distance = a.distance_to(b); // ~5.196
+auto dot      = a.dot(b);          // 32.0
+auto cross    = a.cross(b);        // (-3, 6, -3)
+auto distance = a.distance_to(b);  // ~5.196
+auto unit     = a.normalized();    // length == 1
+
+// World-to-screen projection (Source Engine)
+using namespace omath::source_engine;
+Camera camera(position, angles, viewport, fov, near_plane, far_plane);
+
+if (auto screen = camera.world_to_screen(world_position)) {
+    // draw at screen->x, screen->y
+}
 ```
 
----
+## What is inside
 
-## 📚 Documentation Structure
+<div class="grid cards" markdown>
 
-### Core Mathematics
+-   :material-vector-triangle: **Linear algebra & geometry**
 
-**Linear Algebra**
-- [Vector2](linear_algebra/vector2.md) - 2D vectors with full operator support
-- [Vector3](linear_algebra/vector3.md) - 3D vectors, dot/cross products, angles
-- [Vector4](linear_algebra/vector4.md) - 4D vectors (homogeneous coordinates)
-- [Mat4X4](linear_algebra/mat.md) - 4×4 matrices for transformations
-- [Triangle](linear_algebra/triangle.md) - Triangle primitive and utilities
+    ---
 
-**Trigonometry**
-- [Angle](trigonometry/angle.md) - Strong-typed angle system with range enforcement
-- [Angles](trigonometry/angles.md) - Angle utilities and conversions
-- [View Angles](trigonometry/view_angles.md) - Pitch/Yaw/Roll for camera systems
+    Vectors, matrices, quaternions, strongly-typed angles, triangles, planes, boxes, AABB and OBB.
 
-**3D Primitives**
-- [Box](3d_primitives/box.md) - Axis-aligned bounding boxes
-- [Plane](3d_primitives/plane.md) - Infinite planes and intersections
+    [Vector3](linear_algebra/vector3.md) · [Mat4X4](linear_algebra/mat.md) · [Quaternion](linear_algebra/quaternion.md) · [Angle](trigonometry/angle.md)
 
-### Game Development Features
+-   :material-camera-outline: **Projection & cameras**
 
-**Projection & Camera**
-- [Camera](projection/camera.md) - Generic camera system with engine traits
-- [Error Codes](projection/error_codes.md) - Projection error handling
+    ---
 
-**Collision Detection**
-- [Line Tracer](collision/line_tracer.md) - Ray-triangle, ray-plane intersections
+    Build your own projection pipeline and project world positions to the screen without hunting for the view-projection matrix.
 
-**Projectile Prediction**
-- [Projectile Engine Interface](projectile_prediction/projectile_engine.md) - Base interface
-- [Projectile](projectile_prediction/projectile.md) - Projectile properties
-- [Target](projectile_prediction/target.md) - Target state representation
-- [Legacy Engine](projectile_prediction/proj_pred_engine_legacy.md) - Standard implementation
-- [AVX2 Engine](projectile_prediction/proj_pred_engine_avx2.md) - Optimized implementation
-- [Drag Engine](projectile_prediction/proj_pred_engine_drag.md) - Rounds that lose speed to the air
-- [Projectile Flight](projectile_prediction/projectile_flight.md) - One round, a physics step at a time
+    [Camera](projection/camera.md) · [Error codes](projection/error_codes.md)
 
-**Pathfinding**
-- [A* Algorithm](pathfinding/a_star.md) - A* pathfinding implementation
-- [Navigation Mesh](pathfinding/navigation_mesh.md) - Triangle-based navigation
+-   :material-cube-scan: **Collision**
 
-### Game Engine Support
+    ---
 
-OMath provides built-in support for multiple game engines with proper coordinate system handling:
+    Line tracing, mesh colliders, GJK and EPA behind simple interfaces.
 
-**Source Engine** (Valve - CS:GO, TF2, etc.)
-- [Camera Trait](engines/source_engine/camera_trait.md)
-- [Pred Engine Trait](engines/source_engine/pred_engine_trait.md)
-- [Constants](engines/source_engine/constants.md)
-- [Formulas](engines/source_engine/formulas.md)
+    [Line tracer](collision/line_tracer.md) · [GJK](collision/gjk_algorithm.md) · [EPA](collision/epa_algorithm.md)
 
-**Unity Engine**
-- [Camera Trait](engines/unity_engine/camera_trait.md)
-- [Pred Engine Trait](engines/unity_engine/pred_engine_trait.md)
-- [Constants](engines/unity_engine/constants.md)
-- [Formulas](engines/unity_engine/formulas.md)
+-   :material-bullseye-arrow: **Projectile prediction**
 
-**Unreal Engine** (Epic Games)
-- [Camera Trait](engines/unreal_engine/camera_trait.md)
-- [Pred Engine Trait](engines/unreal_engine/pred_engine_trait.md)
-- [Constants](engines/unreal_engine/constants.md)
-- [Formulas](engines/unreal_engine/formulas.md)
-- [Actor Name](engines/unreal_engine/actor_name.md)
-- [Object Array](engines/unreal_engine/object_array.md)
+    ---
 
-**Frostbite Engine** (EA - Battlefield, etc.)
-- [Camera Trait](engines/frostbite/camera_trait.md)
-- [Pred Engine Trait](engines/frostbite/pred_engine_trait.md)
-- [Constants](engines/frostbite/constants.md)
-- [Formulas](engines/frostbite/formulas.md)
+    O(N) aim-point solvers: legacy, AVX2 and a drag-aware engine for rounds that lose speed in flight.
 
-**IW Engine** (Infinity Ward - Call of Duty)
-- [Camera Trait](engines/iw_engine/camera_trait.md)
-- [Pred Engine Trait](engines/iw_engine/pred_engine_trait.md)
-- [Constants](engines/iw_engine/constants.md)
-- [Formulas](engines/iw_engine/formulas.md)
+    [Engine interface](projectile_prediction/projectile_engine.md) · [Drag engine](projectile_prediction/proj_pred_engine_drag.md)
 
-**OpenGL Engine** (Canonical OpenGL)
-- [Camera Trait](engines/opengl_engine/camera_trait.md)
-- [Pred Engine Trait](engines/opengl_engine/pred_engine_trait.md)
-- [Constants](engines/opengl_engine/constants.md)
-- [Formulas](engines/opengl_engine/formulas.md)
+-   :material-controller: **Engine support**
 
-**Serious Engine** (Croteam - Serious Sam)
-- [Camera Trait](engines/serious_engine/camera_trait.md)
-- [Pred Engine Trait](engines/serious_engine/pred_engine_trait.md)
-- [Mesh Trait](engines/serious_engine/mesh_trait.md)
-- [Constants](engines/serious_engine/constants.md)
-- [Formulas](engines/serious_engine/formulas.md)
+    ---
 
-### Utilities
+    Coordinate systems for Source, Unity, Unreal, Frostbite, IW, CryEngine, RAGE, Serious Engine and canonical OpenGL.
 
-**Color**
-- [Color](utility/color.md) - RGBA color with conversions
+    [Browse engines](#engine-support)
 
-**Pattern Scanning & Memory**
-- [Pattern Scan](utility/pattern_scan.md) - Binary pattern search with wildcards
-- [PE Pattern Scan](utility/pe_pattern_scan.md) - PE file pattern scanning
+-   :material-layers-outline: **HUD & overlays**
 
-**Reverse Engineering**
-- [External Rev Object](rev_eng/external_rev_object.md) - External process memory access
-- [Internal Rev Object](rev_eng/internal_rev_object.md) - Internal memory access
+    ---
 
----
+    Compose ESP overlays declaratively with widgets, gradients and an ImGui renderer.
 
-## ✨ Key Features
+    [HUD overview](hud/overview.md) · [Entity overlay](hud/entity_overlay.md)
 
-- **Efficiency**: Optimized for performance, ensuring quick computations using AVX2.
-- **Versatility**: Includes a wide array of mathematical functions and algorithms.
-- **Ease of Use**: Simplified interface for convenient integration into various projects.
-- **Projectile Prediction**: Projectile prediction engine with O(N) algo complexity, that can power you projectile aim-bot.
-- **3D Projection**: No need to find view-projection matrix anymore you can make your own projection pipeline.
-- **Collision Detection**: Production ready code to handle collision detection by using simple interfaces.
-- **No Additional Dependencies**: No additional dependencies need to use OMath except unit test execution
-- **Ready for meta-programming**: Omath use templates for common types like Vectors, Matrixes etc, to handle all types!
-- **Engine support**: Supports coordinate systems of **Source, Rage, Unity, Unreal, Frostbite, IWEngine, CryEngine, Serious Engine and canonical OpenGL**.
-- **Cross platform**: Supports Windows, MacOS and Linux.
-- **Algorithms**: Has ability to scan for byte pattern with wildcards in PE files/modules, binary slices, works even with Wine apps.
+-   :material-hook: **Hooking**
 
----
+    ---
 
-## 📖 Common Use Cases
+    `HooksManager` hooks DirectX 9/11/12 and OpenGL presents for you, so you only write the draw code.
 
-### World-to-Screen Projection
-Project 3D world coordinates to 2D screen space for ESP overlays, UI elements, or visualization.
+    [HooksManager](hooks/hooks_manager.md)
 
-### Projectile Prediction
-Calculate aim points for moving targets considering projectile speed, gravity, and target velocity.
+-   :material-language-lua: **Lua scripting**
 
-### Collision Detection
-Perform ray-casting, line tracing, and intersection tests for hit detection and physics.
+    ---
 
-### Pattern Scanning
-Search for byte patterns in memory for reverse engineering, modding, or tool development.
+    Bindings for vectors, matrices, engines, collision, colors and HUD, available out of the box.
 
-### Pathfinding
-Find optimal paths through 3D spaces using A* algorithm and navigation meshes.
+    [Lua bindings](lua/lua.md)
 
----
+-   :material-memory: **Reverse engineering**
 
-## 🎮 Gallery
+    ---
 
-<br>
+    Typed internal/external memory access and byte-pattern scanning in PE, ELF and Mach-O images.
+
+    [External objects](rev_eng/external_rev_object.md) · [Pattern scan](utility/pattern_scan.md)
+
+-   :material-map-marker-path: **Pathfinding**
+
+    ---
+
+    A\*, triangle navigation meshes and a walk bot.
+
+    [A\*](pathfinding/a_star.md) · [Navigation mesh](pathfinding/navigation_mesh.md) · [Walk bot](pathfinding/walk_bot.md)
+
+</div>
+
+## Common use cases
+
+| Use case | What you get | Start with |
+|----------|--------------|------------|
+| World-to-screen | Project 3D points to 2D for ESP, UI and visualization | [Camera](projection/camera.md) |
+| Projectile prediction | Aim points for moving targets with speed, gravity and drag | [Projectile engines](projectile_prediction/projectile_engine.md) |
+| Collision detection | Ray casts, line traces and intersection tests | [Line tracer](collision/line_tracer.md) |
+| Pattern scanning | Byte patterns with wildcards across PE, ELF and Mach-O | [Pattern scan](utility/pattern_scan.md) |
+| Overlays | Declarative HUD widgets drawn over a hooked render loop | [HUD overview](hud/overview.md) |
+| Pathfinding | Routes through 3D spaces with A\* and nav meshes | [A\*](pathfinding/a_star.md) |
+
+## Engine support
+
+Every engine ships a camera trait, projectile-prediction trait, mesh trait, constants and formulas, so the same code works with each game's coordinate system.
+
+| Engine | Typical games | Pages |
+|--------|---------------|-------|
+| Source | Half-Life 2, TF2, CS:GO | [Camera](engines/source_engine/camera_trait.md) · [Constants](engines/source_engine/constants.md) · [Formulas](engines/source_engine/formulas.md) |
+| Unity | Unity titles | [Camera](engines/unity_engine/camera_trait.md) · [Constants](engines/unity_engine/constants.md) · [Formulas](engines/unity_engine/formulas.md) |
+| Unreal | Unreal titles, UE 2.5 – UE 5 | [Camera](engines/unreal_engine/camera_trait.md) · [Actor name](engines/unreal_engine/actor_name.md) · [Object array](engines/unreal_engine/object_array.md) |
+| Frostbite | Battlefield and other EA titles | [Camera](engines/frostbite/camera_trait.md) · [Constants](engines/frostbite/constants.md) · [Formulas](engines/frostbite/formulas.md) |
+| IW | Call of Duty | [Camera](engines/iw_engine/camera_trait.md) · [Constants](engines/iw_engine/constants.md) · [Formulas](engines/iw_engine/formulas.md) |
+| CryEngine | Crytek titles | [Camera](engines/cry_engine/camera_trait.md) · [Constants](engines/cry_engine/constants.md) · [Formulas](engines/cry_engine/formulas.md) |
+| RAGE | Rockstar titles | [Camera](engines/rage_engine/camera_trait.md) · [Constants](engines/rage_engine/constants.md) · [Formulas](engines/rage_engine/formulas.md) |
+| Serious Engine | Serious Sam | [Camera](engines/serious_engine/camera_trait.md) · [Constants](engines/serious_engine/constants.md) · [Formulas](engines/serious_engine/formulas.md) |
+| OpenGL | Canonical OpenGL right-handed space | [Camera](engines/opengl_engine/camera_trait.md) · [Constants](engines/opengl_engine/constants.md) · [Formulas](engines/opengl_engine/formulas.md) |
+
+## Key features
+
+- **Efficiency**: optimized for performance, with AVX2 where available.
+- **Versatility**: a wide array of mathematical functions and algorithms.
+- **Ease of use**: a simple interface that is easy to drop into existing projects.
+- **Projectile prediction**: O(N) engines that can power a projectile aim-bot.
+- **3D projection**: build your own projection pipeline, no view-projection matrix hunting.
+- **Collision detection**: production-ready code behind simple interfaces.
+- **No additional dependencies**: nothing is needed except for unit tests, and the optional ImGui, Lua and hooking features.
+- **Meta-programming ready**: templates for vectors, matrices and more, so every numeric type works.
+- **Cross platform**: Windows, macOS and Linux.
+- **Reverse engineering**: typed offset access, pattern scanning in PE/ELF/Mach-O (even Wine apps), Unreal name and object-table resolution.
+- **Hooking & HUD**: DirectX 9/11/12 and OpenGL hooks plus a declarative overlay toolkit.
+- **Scripting**: Lua bindings out of the box.
+
+## Gallery
 
 [![Youtube Video](images/yt_previews/img.png)](https://youtu.be/lM_NJ1yCunw?si=-Qf5yzDcWbaxAXGQ)
 
-<br>
-
 ![APEX Preview]
-
-<br>
 
 ![BO2 Preview]
 
-<br>
-
 ![CS2 Preview]
-
-<br>
 
 ![TF2 Preview]
 
-<br>
-<br>
+![OpenGL Preview]
 
----
+## Community & support
 
-## 🤝 Community & Support
-
-- **Documentation**: [http://libomath.org](http://libomath.org)
-- **GitHub**: [orange-cpp/omath](https://github.com/orange-cpp/omath)
+- **Documentation**: [libomath.org](http://libomath.org)
+- **Source**: [git.libomath.org/orange/omath](https://git.libomath.org/orange/omath)
 - **Discord**: [Join our community](https://discord.gg/eDgdaWbqwZ)
 - **Telegram**: [@orangennotes](https://t.me/orangennotes)
-- **Issues**: [Report bugs or request features](https://github.com/orange-cpp/omath/issues)
-
----
-
-## 💡 Contributing
-
-OMath is open source and welcomes contributions! See [CONTRIBUTING.md](https://github.com/orange-cpp/omath/blob/master/CONTRIBUTING.md) for guidelines.
-
----
-
-*Last updated: 1 Nov 2025*
+- **Contributing**: see [CONTRIBUTING.md](https://git.libomath.org/orange/omath/src/branch/main/CONTRIBUTING.md)
 
 <!----------------------------------{ Images }--------------------------------->
 [APEX Preview]: images/showcase/apex.png
 [BO2 Preview]: images/showcase/cod_bo2.png
 [CS2 Preview]: images/showcase/cs2.jpeg
 [TF2 Preview]: images/showcase/tf2.jpg
+[OpenGL Preview]: images/showcase/opengl.png

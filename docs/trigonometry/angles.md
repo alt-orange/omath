@@ -23,16 +23,16 @@ constexpr Type degrees_to_radians(const Type& degrees) noexcept;
 // FOV conversion (inputs/outputs in degrees, aspect = width/height)
 template<class Type>
 requires std::is_floating_point_v<Type>
-Type horizontal_fov_to_vertical(const Type& horizontal_fov, const Type& aspect) noexcept;
+constexpr Type horizontal_fov_to_vertical(const Type& horizontal_fov, const Type& aspect) noexcept;
 
 template<class Type>
 requires std::is_floating_point_v<Type>
-Type vertical_fov_to_horizontal(const Type& vertical_fov, const Type& aspect) noexcept;
+constexpr Type vertical_fov_to_horizontal(const Type& vertical_fov, const Type& aspect) noexcept;
 
 // Wrap angle into [min, max) (floating-point types)
 template<class Type>
 requires std::is_floating_point_v<Type>
-Type wrap_angle(const Type& angle, const Type& min, const Type& max) noexcept;
+constexpr Type wrap_angle(const Type& angle, const Type& min, const Type& max) noexcept;
 ```
 
 ---
@@ -55,7 +55,7 @@ double deg = omath::angles::radians_to_degrees(std::numbers::pi); // 180
 float hdeg = 90.0f;
 float aspect = 16.0f / 9.0f;
 
-float vdeg = omath::angles::horizontal_fov_to_vertical(hdeg, aspect); // ~58.0°
+float vdeg = omath::angles::horizontal_fov_to_vertical(hdeg, aspect); // ~58.7°
 float hdeg2 = omath::angles::vertical_fov_to_horizontal(vdeg, aspect); // ≈ 90.0°
 ```
 
@@ -87,7 +87,7 @@ float c = omath::angles::wrap_angle(  200.0f, -180.0f, 180.0f); // -160
 * **Aspect ratio** must be **positive** and finite. For `aspect == 0` the FOV helpers are undefined.
 * **Units**: FOV functions accept/return **degrees** but compute internally in radians.
 * **Wrapping interval**: Behavior assumes `max > min`. The result lies in the half-open interval `[min, max)`.
-* **constexpr**: Converters are `constexpr`; FOV helpers are runtime constexpr-compatible except for `std::atan/std::tan` constraints on some standard libraries.
+* **constexpr**: All functions are `constexpr`; the trigonometry and `fmod` they need come from `omath::internal` (`constexpr_math.hpp`), not `<cmath>`.
 
 ---
 
