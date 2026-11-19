@@ -71,10 +71,16 @@
           "features": [
             "dx9-binding",
             "dx11-binding",
-            "dx12-binding",
             "win32-binding"
           ],
           "platform": "windows & !arm & !uwp"
+        },
+        {
+          "name": "imgui",
+          "features": [
+            "dx12-binding"
+          ],
+          "platform": "windows & !arm & !uwp & !x86"
         }
       ]
     },

@@ -27,6 +27,8 @@ namespace omath::hud
         EntityOverlay(const Vector2<float>& top, const Vector2<float>& bottom, float aspect,
                       const std::shared_ptr<HudRendererInterface>& renderer);
 
+        EntityOverlay(const CanvasBox& canvas, const std::shared_ptr<HudRendererInterface>& renderer);
+
         // ── Boxes ────────────────────────────────────────────────────────
         EntityOverlay& add_2d_box(const Color& box_color, const Color& fill_color = Color{0.f, 0.f, 0.f, 0.f},
                                   const Color& outline_color = Color{0.f, 0.f, 0.f, 0.f}, float thickness = 1.f);
@@ -199,47 +201,41 @@ namespace omath::hud
             return *this;
         }
 
+        /// Screen-space bounding rectangle of the AABB's eight projected corners (nullcore's ESP mapping).
+        /// Fails with NO_PROJECTED_VERTEX if any corner cannot be projected (e.g. is behind the camera), since the
+        /// rectangle would be meaningless. `aspect` is unused: the box is the exact projected extent.
         template<class Camera, class Aabb>
         [[nodiscard]]
         static std::expected<EntityOverlay, EntityOverlayError>
-        from_aabb(const Camera& camera, const Aabb& aabb, const float aspect,
+        from_aabb(const Camera& camera, const Aabb& aabb, [[maybe_unused]] const float aspect,
                   const std::shared_ptr<HudRendererInterface>& renderer)
         {
-            using ProjectedVector = std::invoke_result_t<decltype(&Aabb::center), const Aabb&>;
-
-            ProjectedVector top;
-            ProjectedVector bottom;
-            bool has_projected_vertex = false;
+            Vector2<float> min{};
+            Vector2<float> max{};
+            bool first = true;
 
             for (const auto& vertex : aabb.vertices())
             {
-                if (auto projected = camera.world_to_screen_unclipped(vertex))
-                {
-                    if (!has_projected_vertex)
-                    {
-                        top = *projected;
-                        bottom = *projected;
-                        has_projected_vertex = true;
-                        continue;
-                    }
+                const auto projected = camera.world_to_screen_unclipped(vertex);
+                if (!projected)
+                    return std::unexpected(EntityOverlayError::NO_PROJECTED_VERTEX);
 
-                    if (projected->y < top.y)
-                        top = *projected;
-                    if (projected->y > bottom.y)
-                        bottom = *projected;
+                const auto x = static_cast<float>(projected->x);
+                const auto y = static_cast<float>(projected->y);
+                if (first)
+                {
+                    min = max = {x, y};
+                    first = false;
+                    continue;
                 }
+                min = {std::min(min.x, x), std::min(min.y, y)};
+                max = {std::max(max.x, x), std::max(max.y, y)};
             }
 
-            if (!has_projected_vertex)
+            if (first)
                 return std::unexpected(EntityOverlayError::NO_PROJECTED_VERTEX);
 
-            auto center = camera.world_to_screen_unclipped(aabb.center());
-            if (!center)
-                return std::unexpected(EntityOverlayError::CENTER_PROJECTION_FAILED);
-
-            const auto center_x = static_cast<float>(center->x);
-            return EntityOverlay{
-                    {center_x, static_cast<float>(top.y)}, {center_x, static_cast<float>(bottom.y)}, aspect, renderer};
+            return EntityOverlay{CanvasBox::from_bounds(min, max), renderer};
         }
 
     private:

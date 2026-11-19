@@ -224,9 +224,13 @@ namespace omath::hooks
         pp.hDeviceWindow = window.handle();
         pp.Windowed = TRUE;
 
+        // A HAL device cannot be created while the game holds the adapter in exclusive fullscreen. The NULLREF device
+        // can, and d3d9 runs Reset, Present and EndScene through the same functions for both.
         IDirect3DDevice9* device = nullptr;
         if (FAILED(d3d9->CreateDevice(D3DADAPTER_DEFAULT, D3DDEVTYPE_HAL, window.handle(),
-                                      D3DCREATE_SOFTWARE_VERTEXPROCESSING, &pp, &device)))
+                                      D3DCREATE_SOFTWARE_VERTEXPROCESSING, &pp, &device))
+            && FAILED(d3d9->CreateDevice(D3DADAPTER_DEFAULT, D3DDEVTYPE_NULLREF, window.handle(),
+                                         D3DCREATE_SOFTWARE_VERTEXPROCESSING, &pp, &device)))
         {
             d3d9->Release();
             return false;
@@ -461,14 +465,26 @@ namespace omath::hooks
                 callback ? std::make_shared<execute_command_lists_callback>(std::move(callback)) : nullptr;
     }
 
+    namespace
+    {
+        // The window's own character set decides which flavour of the API has to be used: replacing the procedure of a
+        // Unicode window through the ANSI call makes Windows hand ANSI text messages to the original procedure
+        WNDPROC set_wnd_proc(const HWND hwnd, const WNDPROC procedure)
+        {
+            const auto value = reinterpret_cast<LONG_PTR>(procedure);
+
+            return reinterpret_cast<WNDPROC>(IsWindowUnicode(hwnd) ? SetWindowLongPtrW(hwnd, GWLP_WNDPROC, value)
+                                                                  : SetWindowLongPtrA(hwnd, GWLP_WNDPROC, value));
+        }
+    } // namespace
+
     bool HooksManager::hook_wnd_proc(HWND hwnd)
     {
         std::unique_lock lock(m_hook_state_mutex);
         if (m_is_wnd_proc_hooked)
             return true;
 
-        const auto prev = reinterpret_cast<WNDPROC>(
-                SetWindowLongPtr(hwnd, GWLP_WNDPROC, reinterpret_cast<LONG_PTR>(&wnd_proc_detour)));
+        const auto prev = set_wnd_proc(hwnd, &wnd_proc_detour);
         if (!prev)
             return false;
 
@@ -484,7 +500,7 @@ namespace omath::hooks
         if (!m_is_wnd_proc_hooked)
             return;
 
-        SetWindowLongPtr(m_hooked_hwnd, GWLP_WNDPROC, reinterpret_cast<LONG_PTR>(m_original_wndproc));
+        set_wnd_proc(m_hooked_hwnd, m_original_wndproc);
         m_hooked_hwnd = nullptr;
         m_original_wndproc = nullptr;
         m_is_wnd_proc_hooked = false;
@@ -512,7 +528,7 @@ namespace omath::hooks
         }
         if (cb)
             (*cb)(p_device, p_source_rect, p_dest_rect, h_dest_window_override, p_dirty_region);
-        return mgr.m_dx9_present_hook.call<HRESULT>(p_device, p_source_rect, p_dest_rect, h_dest_window_override,
+        return mgr.m_dx9_present_hook.stdcall<HRESULT>(p_device, p_source_rect, p_dest_rect, h_dest_window_override,
                                                     p_dirty_region);
     }
 
@@ -527,7 +543,7 @@ namespace omath::hooks
         }
         if (cb)
             (*cb)(p_device, p_presentation_parameters);
-        return mgr.m_dx9_reset_hook.call<HRESULT>(p_device, p_presentation_parameters);
+        return mgr.m_dx9_reset_hook.stdcall<HRESULT>(p_device, p_presentation_parameters);
     }
 
     HRESULT __stdcall HooksManager::dx9_end_scene_detour(IDirect3DDevice9* p_device)
@@ -540,7 +556,7 @@ namespace omath::hooks
         }
         if (cb)
             (*cb)(p_device);
-        return mgr.m_dx9_end_scene_hook.call<HRESULT>(p_device);
+        return mgr.m_dx9_end_scene_hook.stdcall<HRESULT>(p_device);
     }
 
     HRESULT __stdcall HooksManager::dx11_present_detour(IDXGISwapChain* p_swap_chain, UINT sync_interval, UINT flags)
@@ -553,7 +569,7 @@ namespace omath::hooks
         }
         if (cb)
             (*cb)(p_swap_chain, sync_interval, flags);
-        return mgr.m_dx11_present_hook.call<HRESULT>(p_swap_chain, sync_interval, flags);
+        return mgr.m_dx11_present_hook.stdcall<HRESULT>(p_swap_chain, sync_interval, flags);
     }
 
     HRESULT __stdcall HooksManager::dx11_resize_buffers_detour(IDXGISwapChain* p_swap_chain, UINT buffer_count,
@@ -568,7 +584,7 @@ namespace omath::hooks
         }
         if (cb)
             (*cb)(p_swap_chain, buffer_count, width, height, new_format, swap_chain_flags);
-        return mgr.m_dx11_resize_buffers_hook.call<HRESULT>(p_swap_chain, buffer_count, width, height, new_format,
+        return mgr.m_dx11_resize_buffers_hook.stdcall<HRESULT>(p_swap_chain, buffer_count, width, height, new_format,
                                                             swap_chain_flags);
     }
 
@@ -582,7 +598,7 @@ namespace omath::hooks
         }
         if (cb)
             (*cb)(p_swap_chain, sync_interval, flags);
-        return mgr.m_dx12_present_hook.call<HRESULT>(p_swap_chain, sync_interval, flags);
+        return mgr.m_dx12_present_hook.stdcall<HRESULT>(p_swap_chain, sync_interval, flags);
     }
 
     HRESULT __stdcall HooksManager::dx12_resize_buffers_detour(IDXGISwapChain* p_swap_chain, UINT buffer_count,
@@ -597,7 +613,7 @@ namespace omath::hooks
         }
         if (cb)
             (*cb)(p_swap_chain, buffer_count, width, height, new_format, swap_chain_flags);
-        return mgr.m_dx12_resize_buffers_hook.call<HRESULT>(p_swap_chain, buffer_count, width, height, new_format,
+        return mgr.m_dx12_resize_buffers_hook.stdcall<HRESULT>(p_swap_chain, buffer_count, width, height, new_format,
                                                             swap_chain_flags);
     }
 
@@ -613,7 +629,7 @@ namespace omath::hooks
         }
         if (cb)
             (*cb)(p_command_queue, num_command_lists, pp_command_lists);
-        mgr.m_dx12_execute_command_lists_hook.call<void>(p_command_queue, num_command_lists, pp_command_lists);
+        mgr.m_dx12_execute_command_lists_hook.stdcall<void>(p_command_queue, num_command_lists, pp_command_lists);
     }
 
     BOOL __stdcall HooksManager::opengl_wgl_swap_buffers_detour(HDC hdc)
@@ -621,7 +637,7 @@ namespace omath::hooks
         auto& mgr = get();
 
         if (!g_is_inside_opengl_swap_buffers)
-            return mgr.m_opengl_wgl_swap_buffers_hook.call<BOOL>(hdc);
+            return mgr.m_opengl_wgl_swap_buffers_hook.stdcall<BOOL>(hdc);
         g_is_inside_opengl_swap_buffers = true;
 
         callback_ptr<opengl_swap_buffers_callback> cb;
@@ -632,7 +648,7 @@ namespace omath::hooks
         if (cb)
             (*cb)(hdc);
 
-        const BOOL result = mgr.m_opengl_wgl_swap_buffers_hook.call<BOOL>(hdc);
+        const BOOL result = mgr.m_opengl_wgl_swap_buffers_hook.stdcall<BOOL>(hdc);
         g_is_inside_opengl_swap_buffers = false;
         return result;
     }
@@ -642,7 +658,7 @@ namespace omath::hooks
         auto& mgr = get();
 
         if (g_is_inside_opengl_swap_buffers)
-            return mgr.m_opengl_swap_buffers_hook.call<BOOL>(hdc);
+            return mgr.m_opengl_swap_buffers_hook.stdcall<BOOL>(hdc);
         g_is_inside_opengl_swap_buffers = true;
 
         callback_ptr<opengl_swap_buffers_callback> cb;
@@ -653,7 +669,7 @@ namespace omath::hooks
         if (cb)
             (*cb)(hdc);
 
-        const BOOL result = mgr.m_opengl_swap_buffers_hook.call<BOOL>(hdc);
+        const BOOL result = mgr.m_opengl_swap_buffers_hook.stdcall<BOOL>(hdc);
         g_is_inside_opengl_swap_buffers = false;
         return result;
     }
@@ -673,7 +689,8 @@ namespace omath::hooks
             if (const auto result = (*cb)(hwnd, msg, w_param, l_param))
                 return *result;
         }
-        return CallWindowProc(original, hwnd, msg, w_param, l_param);
+        return IsWindowUnicode(hwnd) ? CallWindowProcW(original, hwnd, msg, w_param, l_param)
+                                     : CallWindowProcA(original, hwnd, msg, w_param, l_param);
     }
 #endif // _WIN32
 

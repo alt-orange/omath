@@ -445,6 +445,12 @@ namespace omath::hud
           m_text_cursor_left(m_canvas.top_left_corner), m_renderer(renderer)
     {
     }
+    EntityOverlay::EntityOverlay(const CanvasBox& canvas, const std::shared_ptr<HudRendererInterface>& renderer)
+        : m_canvas(canvas), m_text_cursor_right(m_canvas.top_right_corner), m_text_cursor_top(m_canvas.top_left_corner),
+          m_text_cursor_bottom(m_canvas.bottom_left_corner), m_text_cursor_left(m_canvas.top_left_corner),
+          m_renderer(renderer)
+    {
+    }
     // ── Spacers ─────────────────────────────────────────────────────────────────
     EntityOverlay& EntityOverlay::add_right_space_vertical(const float size)
     {

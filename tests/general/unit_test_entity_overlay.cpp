@@ -31,3 +31,30 @@ TEST(EntityOverlayTests, FromAabbReturnsErrorCodeIfNoVertexProjects)
     ASSERT_FALSE(overlay.has_value());
     EXPECT_EQ(overlay.error(), omath::hud::EntityOverlayError::NO_PROJECTED_VERTEX);
 }
+
+TEST(EntityOverlayTests, FromAabbReturnsErrorCodeIfAnyVertexIsBehindCamera)
+{
+    constexpr auto fov = omath::projection::FieldOfView::from_degrees(90.f);
+    const omath::unreal_engine::Camera camera{{0.0, 0.0, 0.0}, {}, {1920.f, 1080.f}, fov, 0.01, 1000.0};
+    const omath::primitives::Aabb<double> aabb{{-10.0, -1.0, -1.0}, {110.0, 1.0, 1.0}};
+
+    const auto overlay = omath::hud::EntityOverlay::from_aabb(camera, aabb, 0.5f,
+                                                              std::shared_ptr<omath::hud::HudRendererInterface>{});
+
+    ASSERT_FALSE(overlay.has_value());
+    EXPECT_EQ(overlay.error(), omath::hud::EntityOverlayError::NO_PROJECTED_VERTEX);
+}
+
+TEST(CanvasBoxTests, FromBoundsSpansRectangle)
+{
+    const auto box = omath::hud::CanvasBox::from_bounds({10.f, 20.f}, {50.f, 90.f});
+
+    EXPECT_EQ(box.top_left_corner.x, 10.f);
+    EXPECT_EQ(box.top_left_corner.y, 20.f);
+    EXPECT_EQ(box.top_right_corner.x, 50.f);
+    EXPECT_EQ(box.top_right_corner.y, 20.f);
+    EXPECT_EQ(box.bottom_left_corner.x, 10.f);
+    EXPECT_EQ(box.bottom_left_corner.y, 90.f);
+    EXPECT_EQ(box.bottom_right_corner.x, 50.f);
+    EXPECT_EQ(box.bottom_right_corner.y, 90.f);
+}

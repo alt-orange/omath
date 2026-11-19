@@ -10,6 +10,7 @@
 #pragma once
 #include <Windows.h>
 #include <array>
+#include <cmath>
 #include <cstdint>
 #include <omath/engines/unreal_engine/actor_name.hpp>
 #include <omath/engines/unreal_engine/constants.hpp>
@@ -55,6 +56,15 @@ namespace kf1
     constexpr std::ptrdiff_t k_actor_location_offset = 0x14C; // FVector { float X, Y, Z; }
     constexpr std::ptrdiff_t k_actor_rotation_offset = 0x158; // FRotator { int32 Pitch, Yaw, Roll; }
     constexpr std::ptrdiff_t k_actor_controller_offset = 0x360; // AController*, null when not possessed
+    constexpr std::ptrdiff_t k_actor_level_offset = 0x9C; // ULevel*, AActor::GetLevel
+    constexpr std::ptrdiff_t k_actor_flags_offset = 0x6C; // The uint32 that holds AActor's first bool fields
+    constexpr std::uint32_t k_actor_deleted_flag = 0x1000; // AActor::bDeleteMe, in the word above
+    constexpr std::ptrdiff_t k_controller_player_offset = 0x514; // UPlayer*, PlayerController::Player
+
+    // ULevel::SingleLineCheck, the engine's own line trace. This is the vtable slot AController::LineOfSightTo calls it
+    // through, with the flags below: level geometry and movers only, stopping at the first hit.
+    constexpr std::ptrdiff_t k_level_single_line_check_offset = 0xDC;
+    constexpr std::uint32_t k_trace_world_flags = 0x286;
 
     inline HANDLE g_process{};
 
@@ -97,10 +107,48 @@ namespace kf1
         return RpmTrait::read_memory<Type>(address);
     }
 
+    // The write counterpart of read. It only works for a caller inside the game, whose g_process is the current process
+    // pseudo handle. The handle the standalone overlay opens carries PROCESS_VM_READ alone, so there every write fails.
+    template<class Type>
+    [[nodiscard]]
+    bool write(const std::uintptr_t address, const Type& value)
+    {
+        SIZE_T written{};
+
+        return WriteProcessMemory(g_process, reinterpret_cast<LPVOID>(address), &value, sizeof(Type), &written)
+               && written == sizeof(Type);
+    }
+
     [[nodiscard]]
     inline std::uintptr_t read_ptr(const std::uintptr_t base, const std::ptrdiff_t offset = 0)
     {
         return omath::rev_eng::read_pointer<RpmTrait>(shift_address(base, offset), sizeof(std::uint32_t));
+    }
+
+    // An FString as UTF-8. It is a TArray of UTF-16 characters: the data, then the length with the terminator. Empty for
+    // anything that does not look like a short string.
+    [[nodiscard]]
+    inline std::string read_string(const std::uintptr_t address)
+    {
+        constexpr std::int32_t k_max_length = 256;
+
+        const auto data = read_ptr(address);
+        const auto length = read<std::int32_t>(shift_address(address, sizeof(std::uint32_t))) - 1;
+
+        if (!data || length <= 0 || length > k_max_length)
+            return {};
+
+        std::wstring text(static_cast<std::size_t>(length), L'\0');
+
+        if (!ReadProcessMemory(g_process, reinterpret_cast<LPCVOID>(data), text.data(), text.size() * sizeof(wchar_t),
+                               nullptr))
+            return {};
+
+        std::string utf8(text.size() * 3, '\0');
+        utf8.resize(static_cast<std::size_t>(WideCharToMultiByte(CP_UTF8, 0, text.data(), length, utf8.data(),
+                                                                 static_cast<int>(utf8.size()), nullptr, nullptr)));
+
+        return utf8;
     }
 
     [[nodiscard]]
@@ -259,6 +307,14 @@ namespace kf1
         return target;
     }
 
+    // GObjObjects keeps growing while the game loads levels, so the count taken at attach time goes stale. Anything
+    // that walks the table by index asks for the live one.
+    [[nodiscard]]
+    inline std::uint32_t live_object_count(const Target& target)
+    {
+        return get_object_count<RpmTrait>(target.g_obj_objects, target.object_array).value_or(target.object_count);
+    }
+
     [[nodiscard]]
     inline std::optional<std::uintptr_t> object_at(const Target& target, const std::uint32_t index)
     {
@@ -311,6 +367,25 @@ namespace kf1
         return false;
     }
 
+    // Whether this PlayerController is the one on screen: its Player is the game's viewport. A remote player on a listen
+    // server has a connection there, and a controller the viewport has moved on from has nothing, which is what is left
+    // of the menu backdrop's after joining a game.
+    [[nodiscard]]
+    inline bool is_local_controller(const Target& target, const std::uintptr_t controller)
+    {
+        auto player_class = read_ptr(read_ptr(controller, k_controller_player_offset), k_object_class_offset);
+
+        for (auto hops = 0; player_class && hops < 64; ++hops)
+        {
+            if (object_name(target, player_class) == "Viewport")
+                return true;
+
+            player_class = read_ptr(player_class, k_struct_super_offset);
+        }
+
+        return false;
+    }
+
     struct ReflectionClasses final
     {
         std::uintptr_t actor{};
@@ -333,7 +408,9 @@ namespace kf1
     {
         ReflectionClasses classes;
 
-        for (std::uint32_t index = 0; index < target.object_count; ++index)
+        const auto count = live_object_count(target);
+
+        for (std::uint32_t index = 0; index < count; ++index)
         {
             const auto object = object_at(target, index);
 
@@ -418,9 +495,10 @@ namespace kf1
     }
 
     [[nodiscard]]
-    inline omath::Vector3<double> read_location(const std::uintptr_t actor)
+    inline omath::Vector3<double> read_location(const std::uintptr_t actor,
+                                                const std::ptrdiff_t offset = k_actor_location_offset)
     {
-        const auto location = read<std::array<float, 3>>(shift_address(actor, k_actor_location_offset));
+        const auto location = read<std::array<float, 3>>(shift_address(actor, offset));
 
         return {location[0], location[1], location[2]};
     }
@@ -445,13 +523,33 @@ namespace kf1
                 RollAngle::from_degrees(rotator_units_to_degrees(rotator[2]))};
     }
 
+    // The inverse of rotator_units_to_degrees. The engine masks rotators to 16 bits wherever it reads them, so the
+    // wrapped value is the one it expects.
+    [[nodiscard]]
+    inline std::int32_t degrees_to_rotator_units(const double degrees)
+    {
+        return static_cast<std::int32_t>(std::llround(degrees * 65536.0 / 360.0)) & 0xFFFF;
+    }
+
+    [[nodiscard]]
+    inline bool write_view_angles(const std::uintptr_t actor, const ViewAngles& angles,
+                                  const std::ptrdiff_t offset = k_actor_rotation_offset)
+    {
+        return write(shift_address(actor, offset),
+                     std::array<std::int32_t, 3>{degrees_to_rotator_units(angles.pitch.as_degrees()),
+                                                 degrees_to_rotator_units(angles.yaw.as_degrees()),
+                                                 degrees_to_rotator_units(angles.roll.as_degrees())});
+    }
+
     // A possessed pawn points its Controller back at the controller. The class check matters: plenty of unrelated
     // objects keep a pointer at 0x360 too, a HUD for example.
     [[nodiscard]]
     inline std::uintptr_t find_possessed_pawn(const Target& target, const std::uintptr_t pawn_class,
                                               const std::uintptr_t controller)
     {
-        for (std::uint32_t index = 0; index < target.object_count; ++index)
+        const auto count = live_object_count(target);
+
+        for (std::uint32_t index = 0; index < count; ++index)
         {
             const auto object = object_at(target, index);
 
@@ -470,14 +568,17 @@ namespace kf1
         // How many PlayerControllers the scan walked past, 0 when the static shortcut resolved the player instead
         std::size_t controller_count{};
 
-        // Resolved by name once, on the controller and on the pawn respectively
+        // Resolved by name once on the controller
         std::optional<std::int32_t> fov_offset;
-        std::optional<std::int32_t> eye_height_offset;
 
         // PlayerController::CalcViewRotation, the rotation the engine renders the view with. Actor::Rotation would do
         // as well were it not for KF parking a foreign rotation in it every few frames - measured at 33 of 400
         // samples while moving, against 0 for CalcViewRotation.
         std::optional<std::int32_t> view_rotation_offset;
+
+        // PlayerController::CalcViewLocation, where the engine renders the view from: the player's eyes, the player
+        // being spectated or the spectator's free camera
+        std::optional<std::int32_t> view_location_offset;
 
         [[nodiscard]]
         bool valid() const
@@ -493,47 +594,53 @@ namespace kf1
         player.fov_offset = find_property_offset(target, controller_class, "FovAngle", classes.property);
         player.view_rotation_offset =
                 find_property_offset(target, controller_class, "CalcViewRotation", classes.property);
-
-        if (player.pawn)
-            player.eye_height_offset = find_property_offset(target, read_ptr(player.pawn, k_object_class_offset),
-                                                            "EyeHeight", classes.property);
+        player.view_location_offset =
+                find_property_offset(target, controller_class, "CalcViewLocation", classes.property);
     }
 
-    // Full scan for the local player. KF1 keeps a cinematic PlayerController alive for the menu backdrop, and a listen
-    // server has one per player, so the interesting one is whichever actually possesses a Pawn.
+    // Full scan for the local player. KF1 keeps cinematic PlayerControllers alive for the menu backdrop and a listen
+    // server has one per player, so the one that counts is the one with the viewport. It has no Pawn while spectating.
     [[nodiscard]]
     inline LocalPlayer find_local_player_by_scan(const Target& target, const ReflectionClasses& classes)
     {
-        std::vector<std::uintptr_t> controllers;
+        std::uintptr_t local{};
+        std::size_t controllers{};
 
-        for (std::uint32_t index = 0; index < target.object_count; ++index)
+        const auto count = live_object_count(target);
+
+        for (std::uint32_t index = 0; index < count; ++index)
         {
             const auto object = object_at(target, index);
 
-            if (object.has_value() && is_kind_of(read_ptr(*object, k_object_class_offset), classes.player_controller))
-                controllers.push_back(*object);
-        }
-
-        if (controllers.empty())
-            return {};
-
-        LocalPlayer player{.controller = controllers.front(), .controller_count = controllers.size()};
-
-        for (const auto controller : controllers)
-        {
-            const auto possessed = find_possessed_pawn(target, classes.pawn, controller);
-
-            if (!possessed)
+            if (!object.has_value() || !is_kind_of(read_ptr(*object, k_object_class_offset), classes.player_controller))
                 continue;
 
-            player.controller = controller;
-            player.pawn = possessed;
-            break;
+            ++controllers;
+
+            if (is_local_controller(target, *object))
+                local = *object;
         }
+
+        if (!local)
+            return {};
+
+        LocalPlayer player{.controller = local,
+                           .pawn = find_possessed_pawn(target, classes.pawn, local),
+                           .controller_count = controllers};
 
         resolve_player_properties(target, classes, player);
 
         return player;
+    }
+
+    // The pawn the audio subsystem listens from right now. It follows the local player through level changes and
+    // respawns, and it is 0 while there is none - in the menus, for one. Two reads, cheap enough for every frame.
+    [[nodiscard]]
+    inline std::uintptr_t audio_listener(const Target& target)
+    {
+        const auto audio_subsystem = read_ptr(target.engine_base + k_audio_subsystem_rva);
+
+        return audio_subsystem ? read_ptr(audio_subsystem, k_audio_listener_offset) : 0;
     }
 
     // The audio subsystem's listener is the local pawn, and the pawn points back at its controller, so the whole
@@ -542,12 +649,12 @@ namespace kf1
     [[nodiscard]]
     inline LocalPlayer find_local_player(const Target& target, const ReflectionClasses& classes)
     {
-        const auto audio_subsystem = read_ptr(target.engine_base + k_audio_subsystem_rva);
-        const auto pawn = audio_subsystem ? read_ptr(audio_subsystem, k_audio_listener_offset) : 0;
+        const auto pawn = audio_listener(target);
         const auto controller = pawn ? read_ptr(pawn, k_actor_controller_offset) : 0;
 
         if (!controller || !is_kind_of(read_ptr(pawn, k_object_class_offset), classes.pawn)
-            || !is_kind_of(read_ptr(controller, k_object_class_offset), classes.player_controller))
+            || !is_kind_of(read_ptr(controller, k_object_class_offset), classes.player_controller)
+            || !is_local_controller(target, controller))
             return find_local_player_by_scan(target, classes);
 
         LocalPlayer player{.controller = controller, .pawn = pawn};
@@ -563,7 +670,8 @@ namespace kf1
         if (!player.valid())
             return false;
 
-        if (!is_kind_of(read_ptr(player.controller, k_object_class_offset), classes.player_controller))
+        if (!is_kind_of(read_ptr(player.controller, k_object_class_offset), classes.player_controller)
+            || !read_ptr(player.controller, k_controller_player_offset))
             return false;
 
         return !player.pawn || read_ptr(player.pawn, k_actor_controller_offset) == player.controller;
@@ -576,17 +684,14 @@ namespace kf1
         double fov{90.};
     };
 
-    // Where the engine puts the player's view: the pawn's location lifted by its eye height, angles from the
-    // controller. Without a pawn the controller's own location is the best guess.
+    // Where the engine puts the player's view, as the controller keeps it from PlayerCalcView
     [[nodiscard]]
     inline CameraState read_camera(const LocalPlayer& player)
     {
-        CameraState state{.position = read_location(player.pawn ? player.pawn : player.controller),
+        CameraState state{.position = read_location(player.controller,
+                                                    player.view_location_offset.value_or(k_actor_location_offset)),
                           .angles = read_view_angles(player.controller,
                                                      player.view_rotation_offset.value_or(k_actor_rotation_offset))};
-
-        if (player.pawn && player.eye_height_offset.has_value())
-            state.position.z += read<float>(shift_address(player.pawn, *player.eye_height_offset));
 
         if (player.fov_offset.has_value())
             state.fov = read<float>(shift_address(player.controller, *player.fov_offset));

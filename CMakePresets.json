@@ -93,7 +93,7 @@
       "cacheVariables": {
         "VCPKG_TARGET_TRIPLET": "x86-windows-static",
         "VCPKG_HOST_TRIPLET": "x64-windows",
-        "VCPKG_MANIFEST_FEATURES": "tests;imgui;avx2;examples",
+        "VCPKG_MANIFEST_FEATURES": "tests;imgui;avx2;examples;hooking",
         "OMATH_STATIC_MSVC_RUNTIME_LIBRARY": "ON"
       }
     },

@@ -12,6 +12,10 @@ namespace omath::hud
         CanvasBox() = default;
         CanvasBox(Vector2<float> top, Vector2<float> bottom, float ratio = 4.f);
 
+        /// Box spanning exactly the screen-space rectangle [min, max].
+        [[nodiscard("You have to use canvas box")]]
+        static CanvasBox from_bounds(const Vector2<float>& min, const Vector2<float>& max);
+
         [[nodiscard("You have to use array")]]
         std::array<Vector2<float>, 4> as_array() const;
 

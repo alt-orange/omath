@@ -60,12 +60,12 @@ if (!overlay)
 overlay->contents(/* ... */);
 ```
 
-`from_aabb` projects all eight `aabb.vertices()` with `camera.world_to_screen_unclipped`, takes the projected vertex with the smallest `y` as the top and the one with the largest `y` as the bottom, and puts both on the projected `aabb.center()`'s x. Vertices that fail to project (for example behind the camera) are skipped. The unclipped projection is used so that entities partly off-screen still get a full-size box.
+`from_aabb` projects all eight `aabb.vertices()` with `camera.world_to_screen_unclipped` and uses the exact screen-space bounding rectangle of the projected corners (min/max `x` and `y`) as the overlay box, the same mapping nullcore's ESP uses. If any corner fails to project (for example it is behind the camera) the entity is rejected, because the rectangle would be meaningless. The `aspect` argument is kept for source compatibility but is unused. The unclipped projection is used so that entities partly off-screen still get a full-size box.
 
 | Error | When |
 |-------|------|
-| `NO_PROJECTED_VERTEX` | None of the eight vertices projected, e.g. the whole box is behind the camera |
-| `CENTER_PROJECTION_FAILED` | At least one vertex projected but the AABB centre did not |
+| `NO_PROJECTED_VERTEX` | At least one of the eight vertices did not project, e.g. the box is (partly) behind the camera |
+| `CENTER_PROJECTION_FAILED` | Reserved; no longer returned |
 
 `Camera` and `Aabb` are templates: any camera that provides `world_to_screen_unclipped` (such as `omath::source_engine::Camera`, see [Camera](../projection/camera.md)) and any AABB with `vertices()` and `center()` works, including `double`-based types. The unit test `FromAabbSupportsDoubleCameraCoordinates` uses an Unreal camera with an `Aabb<double>`.
 
